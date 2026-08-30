@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: asia-eateries-webapp
+    runtime: python
+    plan: starter
+    buildCommand: >
+      pip install uv &&
+      cd backend && uv sync --frozen &&
+      cd ../frontend && npm install && npm run build
+    startCommand: cd backend && uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    disk:
+      name: asia-eateries-data
+      mountPath: /opt/render/project/src/backend/data
+      sizeGB: 1
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: openai/gpt-oss-120b
+      - key: PYTHON_VERSION
+        value: "3.12"
