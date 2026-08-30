@@ -6,7 +6,11 @@ import sqlite3
 from pathlib import Path
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
-DB_PATH = DATA_DIR / "eateries.db"
+# Mutable/generated state (the SQLite DB + geocode cache) lives in a subdirectory
+# so it can be mounted as a separate persistent disk without shadowing the
+# git-tracked seed xlsx that also lives under DATA_DIR.
+DB_DIR = DATA_DIR / "db"
+DB_PATH = DB_DIR / "eateries.db"
 
 # Column order mirrors the source xlsx (17 columns), plus geocoding fields.
 SCHEMA = """
@@ -88,7 +92,7 @@ CREATE TABLE IF NOT EXISTS geocode_cache (
 
 
 def get_connection() -> sqlite3.Connection:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    DB_DIR.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
