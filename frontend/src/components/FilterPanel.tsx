@@ -41,9 +41,14 @@ export function FilterPanel({
   const activeCount = countActiveFilters(draft)
 
   return (
-    <div className="fixed inset-0 z-40 flex justify-end bg-black/40 sm:bg-transparent sm:pointer-events-none">
+    <div
+      className="fixed inset-0 z-40 flex justify-end bg-black/40 sm:bg-black/10"
+      onClick={onClose}
+      role="presentation"
+    >
       <div
-        className="pointer-events-auto h-full w-full max-w-sm overflow-y-auto border-l border-neutral-200 bg-white p-5 shadow-xl"
+        className="h-full w-full max-w-sm overflow-y-auto border-l border-neutral-200 bg-white p-5 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-bold text-neutral-900">
@@ -57,7 +62,7 @@ export function FilterPanel({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 sm:hidden"
+            className="rounded-full p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
             aria-label="Close filters"
           >
             ✕
