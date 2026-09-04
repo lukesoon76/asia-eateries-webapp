@@ -99,6 +99,47 @@ def geocode_query(query: str, conn=None) -> dict:
             conn.close()
 
 
+def autocomplete(query: str, limit: int = 5) -> list[dict]:
+    """Live address-suggestion lookup for the submission form. Unlike
+    `geocode_query`, this returns multiple candidates with structured address
+    components and is never cached -- partial, as-you-type queries are highly
+    variable and rarely repeat, so caching them would mostly waste space.
+    Still shares the module-level throttle so it can't exceed Nominatim's
+    1 req/sec policy together with the ingestion/geocode_run jobs.
+    """
+    query = (query or "").strip()
+    if len(query) < 3:
+        return []
+
+    _throttle()
+    try:
+        resp = httpx.get(
+            NOMINATIM_URL,
+            params={"q": query, "format": "jsonv2", "limit": limit, "addressdetails": 1},
+            headers={"User-Agent": USER_AGENT},
+            timeout=10.0,
+        )
+        resp.raise_for_status()
+        results = resp.json()
+    except (httpx.HTTPError, ValueError):
+        return []
+
+    suggestions = []
+    for r in results:
+        addr = r.get("address", {})
+        suggestions.append(
+            {
+                "display_name": r.get("display_name", ""),
+                "lat": float(r["lat"]),
+                "lng": float(r["lon"]),
+                "country": addr.get("country"),
+                "state": addr.get("state") or addr.get("county"),
+                "area": addr.get("suburb") or addr.get("city") or addr.get("town") or addr.get("village"),
+            }
+        )
+    return suggestions
+
+
 def restaurant_query_string(row) -> str:
     """Build the primary geocoder query for a restaurant row: the full Address."""
     address = (row["address"] or "").strip()

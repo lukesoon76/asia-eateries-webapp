@@ -85,7 +85,7 @@ class SubmissionIn(BaseModel):
     category: str
     cuisine: str
     area: str
-    address: Optional[str] = None
+    address: str
     phone: Optional[str] = None
     hours: Optional[str] = None
     price_guide: Optional[str] = None
@@ -101,9 +101,19 @@ class SubmissionOut(SubmissionIn):
     reject_reason: Optional[str] = None
     promoted_restaurant_id: Optional[int] = None
     created_at: str
-    # Loosened back to optional for output: submissions created before cuisine/area
-    # became mandatory may still have nulls here.
+    # Loosened back to optional for output: submissions created before cuisine/area/
+    # address became mandatory may still have nulls here.
     cuisine: Optional[str] = None
+    area: Optional[str] = None
+    address: Optional[str] = None
+
+
+class AddressSuggestion(BaseModel):
+    display_name: str
+    lat: float
+    lng: float
+    country: Optional[str] = None
+    state: Optional[str] = None
     area: Optional[str] = None
 
 

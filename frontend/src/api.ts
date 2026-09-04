@@ -78,6 +78,15 @@ export type SubmissionInput = Pick<
   | 'phone' | 'hours' | 'price_guide' | 'instagram_web' | 'signature' | 'notes'
 >
 
+export interface AddressSuggestion {
+  display_name: string
+  lat: number
+  lng: number
+  country: string | null
+  state: string | null
+  area: string | null
+}
+
 export interface Dish {
   id: number
   restaurant_id: number
@@ -107,6 +116,10 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
 
 function jsonInit(method: string, body: unknown): RequestInit {
   return { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+}
+
+export function autocompleteAddress(q: string): Promise<AddressSuggestion[]> {
+  return fetchJson(`/api/geocode/autocomplete?q=${encodeURIComponent(q)}`)
 }
 
 export function search(params: URLSearchParams): Promise<SearchResponse> {

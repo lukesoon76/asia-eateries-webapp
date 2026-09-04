@@ -1,6 +1,13 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { createSubmission, uploadPhoto, type SubmissionInput } from '../api'
+import {
+  autocompleteAddress,
+  createSubmission,
+  getFilterOptions,
+  uploadPhoto,
+  type AddressSuggestion,
+  type SubmissionInput,
+} from '../api'
 import { useAuth } from '../lib/auth'
 
 const EMPTY: SubmissionInput = {
@@ -30,6 +37,36 @@ function Field({
         onChange={(e) => onChange(e.target.value)}
         className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
       />
+    </label>
+  )
+}
+
+// A searchable dropdown backed by the categories already in use across the
+// dataset (400+ distinct values -- too many for a plain <select>), via the
+// native <datalist> autocomplete. Typing a value not in the list is still
+// allowed, since the category taxonomy keeps growing as new places are added.
+function CategoryField({
+  label, value, onChange, options, required = false,
+}: { label: string; value: string; onChange: (v: string) => void; options: string[]; required?: boolean }) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-sm font-medium text-neutral-700">
+        {label} {required && <span className="text-red-500">*</span>}
+      </span>
+      <input
+        type="text"
+        required={required}
+        list="category-options"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Start typing or pick an existing category…"
+        className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+      />
+      <datalist id="category-options">
+        {options.map((c) => (
+          <option key={c} value={c} />
+        ))}
+      </datalist>
     </label>
   )
 }
@@ -93,6 +130,88 @@ function CuisineField({ value, onChange }: { value: string; onChange: (v: string
   )
 }
 
+// Free OpenStreetMap/Nominatim-backed address lookup -- debounced as-you-type,
+// shows a suggestion list, and on pick also hands back country/state/area so
+// the caller can auto-fill those fields when the user hasn't typed them yet.
+function AddressField({
+  value, onChange, onSuggestionPicked,
+}: { value: string; onChange: (v: string) => void; onSuggestionPicked: (s: AddressSuggestion) => void }) {
+  const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([])
+  const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function onInputChange(v: string) {
+    onChange(v)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    if (v.trim().length < 3) {
+      setSuggestions([])
+      setOpen(false)
+      return
+    }
+    debounceRef.current = setTimeout(async () => {
+      setLoading(true)
+      try {
+        const results = await autocompleteAddress(v)
+        setSuggestions(results)
+        setOpen(results.length > 0)
+      } catch {
+        setSuggestions([])
+      } finally {
+        setLoading(false)
+      }
+    }, 400)
+  }
+
+  function pick(s: AddressSuggestion) {
+    // A debounced fetch from the keystrokes that produced this suggestion
+    // list may still be in flight; cancel it so it can't reopen the dropdown
+    // right after the user has picked something.
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    setSuggestions([])
+    onChange(s.display_name)
+    onSuggestionPicked(s)
+    setOpen(false)
+  }
+
+  return (
+    <div className="relative">
+      <span className="mb-1 block text-sm font-medium text-neutral-700">
+        Address <span className="text-red-500">*</span>
+      </span>
+      <input
+        type="text"
+        required
+        value={value}
+        onChange={(e) => onInputChange(e.target.value)}
+        onFocus={() => suggestions.length > 0 && setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        placeholder="Start typing the address…"
+        autoComplete="off"
+        className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+      />
+      {loading && <p className="mt-1 text-xs text-neutral-400">Searching…</p>}
+      {open && (
+        <ul className="absolute z-10 mt-1 w-full rounded-md border border-neutral-200 bg-white py-1 shadow-lg">
+          {suggestions.map((s, i) => (
+            <li key={i}>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => pick(s)}
+                className="block w-full px-3 py-2 text-left text-sm text-neutral-700 hover:bg-neutral-50"
+              >
+                {s.display_name}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="mt-1 text-xs text-neutral-400">Picking a suggestion also fills in Country / State / Area below.</p>
+    </div>
+  )
+}
+
 function PhotoUpload({ submissionId }: { submissionId: number }) {
   const [uploaded, setUploaded] = useState<string[]>([])
   const [uploading, setUploading] = useState(false)
@@ -149,6 +268,13 @@ export function SubmitPage() {
   const [error, setError] = useState<string | null>(null)
   const [submittedId, setSubmittedId] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
+  const [categoryOptions, setCategoryOptions] = useState<string[]>([])
+
+  useEffect(() => {
+    getFilterOptions()
+      .then((opts) => setCategoryOptions(opts.category))
+      .catch(() => {})
+  }, [])
 
   if (authLoading) return null
 
@@ -167,6 +293,15 @@ export function SubmitPage() {
 
   function set<K extends keyof SubmissionInput>(key: K, value: string) {
     setForm((f) => ({ ...f, [key]: value }))
+  }
+
+  function onAddressSuggestionPicked(s: AddressSuggestion) {
+    setForm((f) => ({
+      ...f,
+      country: f.country.trim() ? f.country : s.country ?? f.country,
+      state_city: f.state_city.trim() ? f.state_city : s.state ?? f.state_city,
+      area: (f.area ?? '').trim() ? f.area : s.area ?? f.area,
+    }))
   }
 
   async function onSubmit(e: React.FormEvent) {
@@ -229,16 +364,26 @@ export function SubmitPage() {
 
       <form onSubmit={onSubmit} className="mt-6 space-y-4">
         <Field label="Name" value={form.name} onChange={(v) => set('name', v)} required />
+        <AddressField
+          value={form.address ?? ''}
+          onChange={(v) => set('address', v)}
+          onSuggestionPicked={onAddressSuggestionPicked}
+        />
         <Field label="Country" value={form.country} onChange={(v) => set('country', v)} required />
         <Field label="State / City" value={form.state_city} onChange={(v) => set('state_city', v)} required />
-        <Field label="Category" value={form.category} onChange={(v) => set('category', v)} required />
+        <CategoryField
+          label="Category"
+          value={form.category}
+          onChange={(v) => set('category', v)}
+          options={categoryOptions}
+          required
+        />
         <CuisineField value={form.cuisine ?? ''} onChange={(v) => set('cuisine', v)} />
         <Field label="Area / Location" value={form.area ?? ''} onChange={(v) => set('area', v)} required />
 
         <details className="rounded-md border border-neutral-200 p-3">
           <summary className="cursor-pointer text-sm font-medium text-neutral-700">More details (optional)</summary>
           <div className="mt-3 space-y-3">
-            <Field label="Address" value={form.address ?? ''} onChange={(v) => set('address', v)} />
             <Field label="Phone" value={form.phone ?? ''} onChange={(v) => set('phone', v)} />
             <Field label="Typical Hours" value={form.hours ?? ''} onChange={(v) => set('hours', v)} />
             <Field label="Price Guide" value={form.price_guide ?? ''} onChange={(v) => set('price_guide', v)} />

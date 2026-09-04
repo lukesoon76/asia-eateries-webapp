@@ -14,7 +14,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from app.db import DB_DIR, init_db
-from app.routers import auth, chat, dishes, filters, photos, restaurants, search, submissions
+from app.routers import auth, chat, dishes, filters, geocode, photos, restaurants, search, submissions
 from app.routers.chat import limiter
 
 app = FastAPI(title="Asia Eateries API")
@@ -48,6 +48,7 @@ app.include_router(auth.router, prefix="/api")
 app.include_router(submissions.router, prefix="/api")
 app.include_router(dishes.router, prefix="/api")
 app.include_router(photos.router, prefix="/api")
+app.include_router(geocode.router, prefix="/api")
 
 _UPLOADS_DIR = DB_DIR / "uploads"
 _UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
