@@ -58,3 +58,75 @@ class ChatResponse(BaseModel):
     answer: str
     restaurants: list[RestaurantOut]
     conversation_id: str
+
+
+class UserOut(BaseModel):
+    id: int
+    email: str
+    display_name: Optional[str] = None
+    is_admin: bool = False
+
+
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+    display_name: Optional[str] = None
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class SubmissionIn(BaseModel):
+    name: str
+    country: str
+    state_city: str
+    category: str
+    cuisine: Optional[str] = None
+    area: Optional[str] = None
+    address: Optional[str] = None
+    phone: Optional[str] = None
+    hours: Optional[str] = None
+    price_guide: Optional[str] = None
+    instagram_web: Optional[str] = None
+    signature: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class SubmissionOut(SubmissionIn):
+    id: int
+    status: str
+    submitted_by: int
+    reject_reason: Optional[str] = None
+    promoted_restaurant_id: Optional[int] = None
+    created_at: str
+
+
+class RejectRequest(BaseModel):
+    reason: Optional[str] = None
+
+
+class DishOut(BaseModel):
+    id: int
+    restaurant_id: int
+    name: str
+    avg_rating: Optional[float] = None
+    rating_count: int = 0
+    my_rating: Optional[int] = None
+
+
+class NewDishRequest(BaseModel):
+    name: str
+
+
+class RateDishRequest(BaseModel):
+    rating: int
+
+
+class PhotoOut(BaseModel):
+    id: int
+    restaurant_id: Optional[int] = None
+    dish_id: Optional[int] = None
+    caption: Optional[str] = None
+    url: str

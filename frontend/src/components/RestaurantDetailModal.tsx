@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import type { Restaurant } from '../api'
 import { hasHygieneFlag } from '../lib/text'
 import { AccoladeBadge } from './AccoladeBadge'
+import { DishesAndPhotos } from './DishesAndPhotos'
 import { StarRating } from './StarRating'
 
 function Field({ label, value }: { label: string; value: string | null }) {
@@ -90,6 +91,8 @@ export function RestaurantDetailModal({
             </dd>
           </div>
         )}
+
+        <DishesAndPhotos restaurantId={restaurant.id} />
       </div>
     </div>
   )

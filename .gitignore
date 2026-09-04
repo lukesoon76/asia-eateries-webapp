@@ -19,6 +19,7 @@ dist/
 .env
 .env.local
 geocode_cache.json
+backend/data/db/uploads/
 
 # OS
 .DS_Store

@@ -88,7 +88,88 @@ CREATE TABLE IF NOT EXISTS geocode_cache (
     status      TEXT NOT NULL,
     updated_at  TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS users (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    email          TEXT UNIQUE NOT NULL,
+    password_hash  TEXT NOT NULL,
+    display_name   TEXT,
+    is_admin       INTEGER NOT NULL DEFAULT 0,
+    created_at     TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+    token       TEXT PRIMARY KEY,
+    user_id     INTEGER NOT NULL REFERENCES users(id),
+    created_at  TEXT NOT NULL,
+    expires_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS submissions (
+    id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+    submitted_by            INTEGER NOT NULL REFERENCES users(id),
+    status                  TEXT NOT NULL DEFAULT 'pending',
+    name                    TEXT NOT NULL,
+    country                 TEXT NOT NULL,
+    state_city              TEXT NOT NULL,
+    category                TEXT NOT NULL,
+    cuisine                 TEXT,
+    area                    TEXT,
+    address                 TEXT,
+    phone                   TEXT,
+    hours                   TEXT,
+    price_guide             TEXT,
+    instagram_web           TEXT,
+    signature               TEXT,
+    notes                   TEXT,
+    reviewed_by             INTEGER REFERENCES users(id),
+    reviewed_at             TEXT,
+    reject_reason           TEXT,
+    promoted_restaurant_id  INTEGER REFERENCES restaurants(id),
+    created_at              TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_submissions_status ON submissions(status);
+CREATE INDEX IF NOT EXISTS idx_submissions_submitted_by ON submissions(submitted_by);
+
+CREATE TABLE IF NOT EXISTS dishes (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    restaurant_id  INTEGER NOT NULL REFERENCES restaurants(id),
+    name           TEXT NOT NULL,
+    created_by     INTEGER REFERENCES users(id),
+    created_at     TEXT NOT NULL,
+    UNIQUE(restaurant_id, name COLLATE NOCASE)
+);
+
+CREATE TABLE IF NOT EXISTS dish_ratings (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    dish_id     INTEGER NOT NULL REFERENCES dishes(id),
+    user_id     INTEGER NOT NULL REFERENCES users(id),
+    rating      INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 10),
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL,
+    UNIQUE(dish_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS photos (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    restaurant_id  INTEGER REFERENCES restaurants(id),
+    submission_id  INTEGER REFERENCES submissions(id),
+    dish_id        INTEGER REFERENCES dishes(id),
+    uploaded_by    INTEGER NOT NULL REFERENCES users(id),
+    filename       TEXT NOT NULL,
+    caption        TEXT,
+    created_at     TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_photos_restaurant_id ON photos(restaurant_id);
 """
+
+# Additive column migrations -- SQLite has no `ADD COLUMN IF NOT EXISTS`,
+# so each is idempotent via try/except on the "duplicate column" error.
+MIGRATIONS = [
+    "ALTER TABLE restaurants ADD COLUMN submission_id INTEGER REFERENCES submissions(id)",
+]
 
 
 def get_connection() -> sqlite3.Connection:
@@ -104,6 +185,12 @@ def init_db() -> None:
     conn = get_connection()
     try:
         conn.executescript(SCHEMA)
+        for statement in MIGRATIONS:
+            try:
+                conn.execute(statement)
+            except sqlite3.OperationalError as e:
+                if "duplicate column" not in str(e):
+                    raise
         conn.commit()
     finally:
         conn.close()
