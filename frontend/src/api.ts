@@ -122,6 +122,10 @@ export function autocompleteAddress(q: string): Promise<AddressSuggestion[]> {
   return fetchJson(`/api/geocode/autocomplete?q=${encodeURIComponent(q)}`)
 }
 
+export function reverseGeocode(lat: number, lng: number): Promise<AddressSuggestion | null> {
+  return fetchJson(`/api/geocode/reverse?lat=${lat}&lng=${lng}`)
+}
+
 export function search(params: URLSearchParams): Promise<SearchResponse> {
   return fetchJson(`/api/search?${params.toString()}`)
 }

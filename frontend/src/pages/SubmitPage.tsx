@@ -4,10 +4,12 @@ import {
   autocompleteAddress,
   createSubmission,
   getFilterOptions,
+  reverseGeocode,
   uploadPhoto,
   type AddressSuggestion,
   type SubmissionInput,
 } from '../api'
+import { LocationMap } from '../components/LocationMap'
 import { useAuth } from '../lib/auth'
 
 const EMPTY: SubmissionInput = {
@@ -326,6 +328,7 @@ export function SubmitPage() {
   const [submittedId, setSubmittedId] = useState<number | null>(null)
   const [uploadedPhotoUrls, setUploadedPhotoUrls] = useState<string[]>([])
   const [pendingPhotos, setPendingPhotos] = useState<File[]>([])
+  const [pickedLocation, setPickedLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [loading, setLoading] = useState(false)
   const [categoryOptions, setCategoryOptions] = useState<string[]>([])
 
@@ -361,6 +364,30 @@ export function SubmitPage() {
       state_city: f.state_city.trim() ? f.state_city : s.state ?? f.state_city,
       area: (f.area ?? '').trim() ? f.area : s.area ?? f.area,
     }))
+    setPickedLocation({ lat: s.lat, lng: s.lng })
+  }
+
+  async function onMapPick(lat: number, lng: number) {
+    // Move the pin immediately; fill in the text fields once reverse
+    // geocoding resolves (the pin placement itself never depends on it).
+    setPickedLocation({ lat, lng })
+    try {
+      const result = await reverseGeocode(lat, lng)
+      if (!result) return
+      setForm((f) => ({
+        ...f,
+        // A map click is a deliberate "the place is here" action, so the
+        // Address field always reflects it -- unlike Country/State/Area,
+        // which only fill in when the user hasn't already typed something.
+        address: result.display_name,
+        country: f.country.trim() ? f.country : result.country ?? f.country,
+        state_city: f.state_city.trim() ? f.state_city : result.state ?? f.state_city,
+        area: (f.area ?? '').trim() ? f.area : result.area ?? f.area,
+      }))
+    } catch {
+      // Leave the pin placed even if reverse geocoding fails -- the user can
+      // still type the address by hand.
+    }
   }
 
   async function onSubmit(e: React.FormEvent) {
@@ -449,6 +476,7 @@ export function SubmitPage() {
           onChange={(v) => set('address', v)}
           onSuggestionPicked={onAddressSuggestionPicked}
         />
+        <LocationMap value={pickedLocation} onPick={onMapPick} />
         <Field label="Country" value={form.country} onChange={(v) => set('country', v)} required />
         <Field label="State / City" value={form.state_city} onChange={(v) => set('state_city', v)} required />
         <CategoryField

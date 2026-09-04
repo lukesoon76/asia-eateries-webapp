@@ -140,6 +140,40 @@ def autocomplete(query: str, limit: int = 5) -> list[dict]:
     return suggestions
 
 
+REVERSE_URL = "https://nominatim.openstreetmap.org/reverse"
+
+
+def reverse_geocode(lat: float, lng: float) -> dict | None:
+    """Turn a map click's lat/lng back into an address, for the visual
+    pin-drop picker on the submission form. Same throttle/User-Agent as
+    every other Nominatim call; not cached, since map clicks are one-off."""
+    _throttle()
+    try:
+        resp = httpx.get(
+            REVERSE_URL,
+            params={"lat": lat, "lon": lng, "format": "jsonv2", "addressdetails": 1},
+            headers={"User-Agent": USER_AGENT},
+            timeout=10.0,
+        )
+        resp.raise_for_status()
+        r = resp.json()
+    except (httpx.HTTPError, ValueError):
+        return None
+
+    if not r or "error" in r:
+        return None
+
+    addr = r.get("address", {})
+    return {
+        "display_name": r.get("display_name", ""),
+        "lat": lat,
+        "lng": lng,
+        "country": addr.get("country"),
+        "state": addr.get("state") or addr.get("county"),
+        "area": addr.get("suburb") or addr.get("city") or addr.get("town") or addr.get("village"),
+    }
+
+
 def restaurant_query_string(row) -> str:
     """Build the primary geocoder query for a restaurant row: the full Address."""
     address = (row["address"] or "").strip()
