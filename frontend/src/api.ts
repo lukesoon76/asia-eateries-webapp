@@ -186,13 +186,14 @@ export function getPhotos(restaurantId: number): Promise<Photo[]> {
 }
 
 export async function uploadPhoto(
-  restaurantId: number,
+  target: { restaurantId?: number; submissionId?: number },
   file: File,
   opts: { dishId?: number; caption?: string } = {},
 ): Promise<Photo> {
   const form = new FormData()
   form.append('file', file)
-  form.append('restaurant_id', String(restaurantId))
+  if (target.restaurantId) form.append('restaurant_id', String(target.restaurantId))
+  if (target.submissionId) form.append('submission_id', String(target.submissionId))
   if (opts.dishId) form.append('dish_id', String(opts.dishId))
   if (opts.caption) form.append('caption', opts.caption)
   const res = await fetch('/api/photos', { method: 'POST', body: form, credentials: 'include' })

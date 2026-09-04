@@ -89,7 +89,7 @@ export function DishesAndPhotos({ restaurantId }: { restaurantId: number }) {
     setUploading(true)
     setError(null)
     try {
-      const photo = await uploadPhoto(restaurantId, file)
+      const photo = await uploadPhoto({ restaurantId }, file)
       setPhotos((prev) => [photo, ...prev])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed')
