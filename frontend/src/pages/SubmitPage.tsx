@@ -212,8 +212,63 @@ function AddressField({
   )
 }
 
-function PhotoUpload({ submissionId }: { submissionId: number }) {
-  const [uploaded, setUploaded] = useState<string[]>([])
+// Local-only file picker used on the main form, before the submission (and
+// therefore a submission_id to attach photos to) exists yet. Files are held
+// in memory and only actually uploaded once the submission is created.
+function PhotoPicker({ files, onChange }: { files: File[]; onChange: (files: File[]) => void }) {
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const previews = files.map((f) => ({ file: f, url: URL.createObjectURL(f) }))
+
+  useEffect(() => {
+    return () => previews.forEach((p) => URL.revokeObjectURL(p.url))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [files])
+
+  function addFiles(selected: FileList | null) {
+    if (!selected || selected.length === 0) return
+    onChange([...files, ...Array.from(selected)])
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  function removeAt(index: number) {
+    onChange(files.filter((_, i) => i !== index))
+  }
+
+  return (
+    <div>
+      <span className="mb-1 block text-sm font-medium text-neutral-700">Photos (optional)</span>
+      <p className="mb-2 text-xs text-neutral-500">Pictures of the eatery or dishes help reviewers approve it faster.</p>
+      {previews.length > 0 && (
+        <div className="mb-2 grid grid-cols-4 gap-2">
+          {previews.map((p, i) => (
+            <div key={p.url} className="group relative">
+              <img src={p.url} alt="" className="aspect-square w-full rounded-md object-cover" />
+              <button
+                type="button"
+                onClick={() => removeAt(i)}
+                className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-xs text-white hover:bg-black/80"
+                aria-label="Remove photo"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept="image/jpeg,image/png,image/webp"
+        onChange={(e) => addFiles(e.target.files)}
+        className="text-sm"
+      />
+    </div>
+  )
+}
+
+function PhotoUpload({ submissionId, initialPhotos = [] }: { submissionId: number; initialPhotos?: string[] }) {
+  const [uploaded, setUploaded] = useState<string[]>(initialPhotos)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -236,7 +291,9 @@ function PhotoUpload({ submissionId }: { submissionId: number }) {
 
   return (
     <div className="mt-6 rounded-lg border border-neutral-200 p-4 text-left">
-      <p className="text-sm font-medium text-neutral-700">Add photos (optional)</p>
+      <p className="text-sm font-medium text-neutral-700">
+        {initialPhotos.length > 0 ? 'Add more photos (optional)' : 'Add photos (optional)'}
+      </p>
       <p className="mt-0.5 text-xs text-neutral-500">Pictures of the eatery or dishes help reviewers approve it faster.</p>
       {uploaded.length > 0 && (
         <div className="mt-3 grid grid-cols-4 gap-2">
@@ -267,6 +324,8 @@ export function SubmitPage() {
   const [form, setForm] = useState<SubmissionInput>(EMPTY)
   const [error, setError] = useState<string | null>(null)
   const [submittedId, setSubmittedId] = useState<number | null>(null)
+  const [uploadedPhotoUrls, setUploadedPhotoUrls] = useState<string[]>([])
+  const [pendingPhotos, setPendingPhotos] = useState<File[]>([])
   const [loading, setLoading] = useState(false)
   const [categoryOptions, setCategoryOptions] = useState<string[]>([])
 
@@ -314,6 +373,22 @@ export function SubmitPage() {
         Object.entries(form).map(([k, v]) => [k, (v ?? '').trim() === '' ? null : v]),
       ) as unknown as SubmissionInput
       const submission = await createSubmission(payload)
+
+      // Now that the submission exists, upload any photos picked before
+      // submitting. Uploaded one at a time; a failed photo doesn't block the
+      // submission itself -- it already succeeded -- so just surface it.
+      const urls: string[] = []
+      let photoError: string | null = null
+      for (const file of pendingPhotos) {
+        try {
+          const photo = await uploadPhoto({ submissionId: submission.id }, file)
+          urls.push(photo.url)
+        } catch (err) {
+          photoError = err instanceof Error ? err.message : 'A photo failed to upload'
+        }
+      }
+      setUploadedPhotoUrls(urls)
+      if (photoError) setError(photoError)
       setSubmittedId(submission.id)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not submit')
@@ -330,7 +405,9 @@ export function SubmitPage() {
           Your submission is pending review. You'll see it appear in search once it's approved.
         </p>
 
-        <PhotoUpload submissionId={submittedId} />
+        {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+
+        <PhotoUpload submissionId={submittedId} initialPhotos={uploadedPhotoUrls} />
 
         <div className="mt-6 flex justify-center gap-3">
           <button
@@ -338,6 +415,9 @@ export function SubmitPage() {
             onClick={() => {
               setForm(EMPTY)
               setSubmittedId(null)
+              setPendingPhotos([])
+              setUploadedPhotoUrls([])
+              setError(null)
             }}
             className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50"
           >
@@ -380,6 +460,8 @@ export function SubmitPage() {
         />
         <CuisineField value={form.cuisine ?? ''} onChange={(v) => set('cuisine', v)} />
         <Field label="Area / Location" value={form.area ?? ''} onChange={(v) => set('area', v)} required />
+
+        <PhotoPicker files={pendingPhotos} onChange={setPendingPhotos} />
 
         <details className="rounded-md border border-neutral-200 p-3">
           <summary className="cursor-pointer text-sm font-medium text-neutral-700">More details (optional)</summary>
