@@ -88,7 +88,7 @@ export function SearchPage() {
       {!engaged && (
         <div className="mb-8 text-center">
           <h1 className="text-4xl font-bold tracking-tight text-neutral-900">Asia Eateries</h1>
-          <p className="mt-2 text-neutral-500">Search 10,000+ curated restaurants and stalls across Asia</p>
+          <p className="mt-2 text-neutral-500">Search curated restaurants and stalls across Asia</p>
         </div>
       )}
 
