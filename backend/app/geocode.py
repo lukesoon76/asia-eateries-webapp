@@ -99,6 +99,26 @@ def geocode_query(query: str, conn=None) -> dict:
             conn.close()
 
 
+def _address_fields(addr: dict) -> dict:
+    """Map Nominatim's address breakdown onto the form's Country/State/Area
+    fields. Nominatim only sets `state` for places under a true state/province;
+    Malaysia's Federal Territories (Kuala Lumpur, Putrajaya, Labuan) and many
+    city-states instead carry the name under `city` with no `state` at all --
+    so `city`/`state_district` are needed as fallbacks, not just `county`.
+    """
+    return {
+        "country": addr.get("country"),
+        "state": addr.get("state") or addr.get("state_district") or addr.get("county") or addr.get("city"),
+        "area": (
+            addr.get("suburb")
+            or addr.get("city_district")
+            or addr.get("neighbourhood")
+            or addr.get("town")
+            or addr.get("village")
+        ),
+    }
+
+
 def autocomplete(query: str, limit: int = 5) -> list[dict]:
     """Live address-suggestion lookup for the submission form. Unlike
     `geocode_query`, this returns multiple candidates with structured address
@@ -124,20 +144,15 @@ def autocomplete(query: str, limit: int = 5) -> list[dict]:
     except (httpx.HTTPError, ValueError):
         return []
 
-    suggestions = []
-    for r in results:
-        addr = r.get("address", {})
-        suggestions.append(
-            {
-                "display_name": r.get("display_name", ""),
-                "lat": float(r["lat"]),
-                "lng": float(r["lon"]),
-                "country": addr.get("country"),
-                "state": addr.get("state") or addr.get("county"),
-                "area": addr.get("suburb") or addr.get("city") or addr.get("town") or addr.get("village"),
-            }
-        )
-    return suggestions
+    return [
+        {
+            "display_name": r.get("display_name", ""),
+            "lat": float(r["lat"]),
+            "lng": float(r["lon"]),
+            **_address_fields(r.get("address", {})),
+        }
+        for r in results
+    ]
 
 
 REVERSE_URL = "https://nominatim.openstreetmap.org/reverse"
@@ -163,14 +178,11 @@ def reverse_geocode(lat: float, lng: float) -> dict | None:
     if not r or "error" in r:
         return None
 
-    addr = r.get("address", {})
     return {
         "display_name": r.get("display_name", ""),
         "lat": lat,
         "lng": lng,
-        "country": addr.get("country"),
-        "state": addr.get("state") or addr.get("county"),
-        "area": addr.get("suburb") or addr.get("city") or addr.get("town") or addr.get("village"),
+        **_address_fields(r.get("address", {})),
     }
 
 
