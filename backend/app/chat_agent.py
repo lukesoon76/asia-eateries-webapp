@@ -56,14 +56,14 @@ TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "Free-text search, e.g. a dish or restaurant name"},
-                    "category": {"type": "string", "description": "Food type category, e.g. 'Char Kuey Teow'"},
-                    "cuisine": {"type": "string", "description": "Cuisine/style, e.g. 'Hakka Cuisine'"},
-                    "country": {"type": "string"},
-                    "state": {"type": "string", "description": "State/City, e.g. 'Kuala Lumpur', 'Penang'"},
-                    "min_rating": {"type": "number"},
-                    "area": {"type": "string", "description": "Neighbourhood, e.g. 'Cheras', 'George Town'"},
-                    "limit": {"type": "integer", "default": 8},
+                    "query": {"type": ["string", "null"], "description": "Free-text search, e.g. a dish or restaurant name"},
+                    "category": {"type": ["string", "null"], "description": "Food type category, e.g. 'Char Kuey Teow'"},
+                    "cuisine": {"type": ["string", "null"], "description": "Cuisine/style, e.g. 'Hakka Cuisine'"},
+                    "country": {"type": ["string", "null"]},
+                    "state": {"type": ["string", "null"], "description": "State/City, e.g. 'Kuala Lumpur', 'Penang'"},
+                    "min_rating": {"type": ["number", "null"]},
+                    "area": {"type": ["string", "null"], "description": "Neighbourhood, e.g. 'Cheras', 'George Town'"},
+                    "limit": {"type": ["integer", "null"], "default": 5},
                 },
             },
         },
@@ -81,11 +81,11 @@ TOOLS = [
                 "type": "object",
                 "properties": {
                     "place_name_or_address": {"type": "string"},
-                    "radius_km": {"type": "number", "default": 3},
-                    "category": {"type": "string"},
-                    "cuisine": {"type": "string"},
-                    "min_rating": {"type": "number"},
-                    "limit": {"type": "integer", "default": 8},
+                    "radius_km": {"type": ["number", "null"], "default": 3},
+                    "category": {"type": ["string", "null"]},
+                    "cuisine": {"type": ["string", "null"]},
+                    "min_rating": {"type": ["number", "null"]},
+                    "limit": {"type": ["integer", "null"], "default": 5},
                 },
                 "required": ["place_name_or_address"],
             },
@@ -106,9 +106,51 @@ TOOLS = [
 ]
 
 
+DEFAULT_RESULT_LIMIT = 5
+MAX_RESULT_LIMIT = 8
+
+
+def _lean_row(r: dict) -> dict:
+    """Trim a full restaurant row down to what the model actually needs to
+    write an answer. Groq's free tier caps requests at 8000 tokens/minute --
+    full rows (long Notes/Source/Signature text, address, phone, lat/lng...)
+    blow through that fast, especially once a few tool calls stack up in one
+    turn. The frontend still gets full rows separately via `surfaced`/
+    `restaurants` in the API response; only the model's view is slimmed down.
+    """
+
+    def trim(s, n):
+        if not s or s == "-":
+            return None
+        return s if len(s) <= n else s[: n - 1] + "…"
+
+    out = {
+        "id": r["id"],
+        "name": r["name"],
+        "rating": r["rating"],
+        "verified": r["verified"],
+        "category": r["category"],
+        "cuisine": r["cuisine"],
+        "area": r["area"],
+        "state_city": r["state_city"],
+        "country": r["country"],
+        "price_guide": trim(r.get("price_guide"), 40),
+        "accolades": trim(r.get("accolades"), 80),
+        "signature": trim(r.get("signature"), 150),
+        "notes": trim(r.get("notes"), 200),
+    }
+    if r.get("distance_km") is not None:
+        out["distance_km"] = r["distance_km"]
+    return {k: v for k, v in out.items() if v is not None}
+
+
 def _run_tool(name: str, tool_input: dict[str, Any]) -> tuple[dict, list[dict]]:
-    """Execute a tool call. Returns (tool_result_payload, restaurants_surfaced)."""
+    """Execute a tool call. Returns (tool_result_payload, restaurants_surfaced).
+    `tool_result_payload` uses lean rows (for the model); `restaurants_surfaced`
+    keeps full rows (for the frontend's restaurant cards).
+    """
     if name == "search_restaurants":
+        limit = min(int(tool_input.get("limit") or DEFAULT_RESULT_LIMIT), MAX_RESULT_LIMIT)
         total, results = search_restaurants(
             q=tool_input.get("query"),
             country=[tool_input["country"]] if tool_input.get("country") else None,
@@ -118,17 +160,18 @@ def _run_tool(name: str, tool_input: dict[str, Any]) -> tuple[dict, list[dict]]:
             min_rating=tool_input.get("min_rating"),
             area_contains=tool_input.get("area"),
             page=1,
-            page_size=int(tool_input.get("limit") or 8),
+            page_size=limit,
             sort_by="rating",
             order="desc",
         )
-        return {"total": total, "results": results}, results
+        return {"total": total, "results": [_lean_row(r) for r in results]}, results
 
     if name == "find_near":
         place = tool_input.get("place_name_or_address", "")
         geo = geocode_query(place)
         if geo["status"] != "ok":
             return {"error": f"Could not geocode '{place}'. Ask the user to clarify the location."}, []
+        limit = min(int(tool_input.get("limit") or DEFAULT_RESULT_LIMIT), MAX_RESULT_LIMIT)
         results = find_near(
             geo["lat"],
             geo["lng"],
@@ -136,27 +179,34 @@ def _run_tool(name: str, tool_input: dict[str, Any]) -> tuple[dict, list[dict]]:
             category=tool_input.get("category"),
             cuisine=tool_input.get("cuisine"),
             min_rating=tool_input.get("min_rating"),
-            limit=int(tool_input.get("limit") or 8),
+            limit=limit,
         )
-        return {"geocoded": {"lat": geo["lat"], "lng": geo["lng"]}, "results": results}, results
+        return {
+            "geocoded": {"lat": geo["lat"], "lng": geo["lng"]},
+            "results": [_lean_row(r) for r in results],
+        }, results
 
     if name == "get_restaurant_details":
         row = get_restaurant(int(tool_input["id"]))
         if row is None:
             return {"error": "No restaurant with that id."}, []
-        return {"result": row}, [row]
+        return {"result": _lean_row(row)}, [row]
 
     return {"error": f"Unknown tool {name}"}, []
+
+
+HISTORY_TURN_LIMIT = 4  # user+assistant pairs; bounds token growth over a long conversation
 
 
 def _load_history(conversation_id: str) -> list[dict]:
     conn = get_connection()
     try:
         rows = conn.execute(
-            "SELECT role, content FROM conversation_messages WHERE conversation_id = ? ORDER BY id",
-            (conversation_id,),
+            "SELECT role, content FROM conversation_messages WHERE conversation_id = ? "
+            "ORDER BY id DESC LIMIT ?",
+            (conversation_id, HISTORY_TURN_LIMIT * 2),
         ).fetchall()
-        return [{"role": r["role"], "content": r["content"]} for r in rows]
+        return [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]
     finally:
         conn.close()
 
