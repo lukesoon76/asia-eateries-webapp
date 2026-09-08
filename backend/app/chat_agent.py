@@ -19,6 +19,7 @@ from groq import Groq
 from app.db import get_connection
 from app.geocode import geocode_query
 from app.queries import find_near, get_restaurant, search_restaurants
+from app.query_parser import parse_chat_query, price_tier_to_search_term
 
 MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
 
@@ -144,20 +145,32 @@ def _lean_row(r: dict) -> dict:
     return {k: v for k, v in out.items() if v is not None}
 
 
-def _run_tool(name: str, tool_input: dict[str, Any]) -> tuple[dict, list[dict]]:
+def _run_tool(name: str, tool_input: dict[str, Any], parsed: Any = None) -> tuple[dict, list[dict]]:
     """Execute a tool call. Returns (tool_result_payload, restaurants_surfaced).
     `tool_result_payload` uses lean rows (for the model); `restaurants_surfaced`
     keeps full rows (for the frontend's restaurant cards).
+
+    `parsed` (ParsedQuery) provides pre-extracted filters to guide results
+    and reduce token waste by sending only relevant restaurants to the LLM.
     """
     if name == "search_restaurants":
         limit = min(int(tool_input.get("limit") or DEFAULT_RESULT_LIMIT), MAX_RESULT_LIMIT)
+
+        # Merge tool_input with parsed query hints (tool_input takes precedence)
+        state = tool_input.get("state") or (parsed.location if parsed else None)
+        category = tool_input.get("category") or (parsed.category if parsed else None)
+        cuisine = tool_input.get("cuisine") or (parsed.cuisine if parsed else None)
+        min_rating = tool_input.get("min_rating") or (parsed.min_rating if parsed else None)
+        verified_only = parsed.verified_only if parsed else False
+
         total, results = search_restaurants(
             q=tool_input.get("query"),
             country=[tool_input["country"]] if tool_input.get("country") else None,
-            state_city=[tool_input["state"]] if tool_input.get("state") else None,
-            category=[tool_input["category"]] if tool_input.get("category") else None,
-            cuisine=[tool_input["cuisine"]] if tool_input.get("cuisine") else None,
-            min_rating=tool_input.get("min_rating"),
+            state_city=[state] if state else None,
+            category=[category] if category else None,
+            cuisine=[cuisine] if cuisine else None,
+            min_rating=min_rating,
+            verified_only=verified_only,
             area_contains=tool_input.get("area"),
             page=1,
             page_size=limit,
@@ -172,13 +185,19 @@ def _run_tool(name: str, tool_input: dict[str, Any]) -> tuple[dict, list[dict]]:
         if geo["status"] != "ok":
             return {"error": f"Could not geocode '{place}'. Ask the user to clarify the location."}, []
         limit = min(int(tool_input.get("limit") or DEFAULT_RESULT_LIMIT), MAX_RESULT_LIMIT)
+
+        # Merge tool_input with parsed query hints
+        category = tool_input.get("category") or (parsed.category if parsed else None)
+        cuisine = tool_input.get("cuisine") or (parsed.cuisine if parsed else None)
+        min_rating = tool_input.get("min_rating") or (parsed.min_rating if parsed else None)
+
         results = find_near(
             geo["lat"],
             geo["lng"],
             radius_km=float(tool_input.get("radius_km") or 3),
-            category=tool_input.get("category"),
-            cuisine=tool_input.get("cuisine"),
-            min_rating=tool_input.get("min_rating"),
+            category=category,
+            cuisine=cuisine,
+            min_rating=min_rating,
             limit=limit,
         )
         return {
@@ -253,6 +272,9 @@ def run_chat(message: str, conversation_id: str) -> dict:
     _ensure_conversation(conversation_id)
     history = _load_history(conversation_id)
 
+    # Parse the user's message to extract structured intent and filters
+    parsed = parse_chat_query(message)
+
     messages: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}]
     messages.extend({"role": h["role"], "content": h["content"]} for h in history)
     messages.append({"role": "user", "content": message})
@@ -294,7 +316,8 @@ def run_chat(message: str, conversation_id: str) -> dict:
                 tool_input = json.loads(tc.function.arguments or "{}")
             except json.JSONDecodeError:
                 tool_input = {}
-            payload, results = _run_tool(tc.function.name, tool_input)
+            # Pass parsed query to guide tool execution with pre-extracted filters
+            payload, results = _run_tool(tc.function.name, tool_input, parsed=parsed)
             for r in results:
                 if r["id"] not in seen_ids:
                     seen_ids.add(r["id"])
