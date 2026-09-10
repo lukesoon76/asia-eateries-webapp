@@ -4,6 +4,7 @@ import { hasHygieneFlag } from '../lib/text'
 import { AccoladeBadge } from './AccoladeBadge'
 import { DishesAndPhotos } from './DishesAndPhotos'
 import { StarRating } from './StarRating'
+import { VerificationContributions } from './VerificationContributions'
 
 function Field({ label, value }: { label: string; value: string | null }) {
   if (!value || value === '-') return null
@@ -91,6 +92,8 @@ export function RestaurantDetailModal({
             </dd>
           </div>
         )}
+
+        <VerificationContributions restaurantId={restaurant.id} isUnverified={!restaurant.verified} />
 
         <DishesAndPhotos restaurantId={restaurant.id} />
       </div>

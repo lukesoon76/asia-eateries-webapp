@@ -163,6 +163,19 @@ CREATE TABLE IF NOT EXISTS photos (
 );
 
 CREATE INDEX IF NOT EXISTS idx_photos_restaurant_id ON photos(restaurant_id);
+
+CREATE TABLE IF NOT EXISTS verification_contributions (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    restaurant_id   INTEGER NOT NULL REFERENCES restaurants(id),
+    user_id         INTEGER NOT NULL REFERENCES users(id),
+    contribution_type TEXT NOT NULL CHECK (contribution_type IN ('comment', 'photo')),
+    comment_text    TEXT,
+    photo_id        INTEGER REFERENCES photos(id),
+    created_at      TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_verifications_restaurant_id ON verification_contributions(restaurant_id);
+CREATE INDEX IF NOT EXISTS idx_verifications_user_id ON verification_contributions(user_id);
 """
 
 # Additive column migrations -- SQLite has no `ADD COLUMN IF NOT EXISTS`,
