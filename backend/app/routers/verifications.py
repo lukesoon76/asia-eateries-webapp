@@ -103,6 +103,61 @@ async def add_verification_photo(
         conn.close()
 
 
+@router.post("/{restaurant_id}/rate")
+async def rate_unverified_restaurant(
+    restaurant_id: int,
+    rating: float = Form(...),
+    current_user: dict = Depends(require_user),
+) -> dict:
+    """Rate an unverified restaurant (1-10), automatically verifying it."""
+    conn = get_connection()
+    try:
+        # Verify restaurant exists and is unverified
+        restaurant = get_restaurant(restaurant_id)
+        if not restaurant:
+            raise HTTPException(status_code=404, detail="Restaurant not found")
+        if restaurant["rating"] is not None:
+            raise HTTPException(status_code=400, detail="Restaurant is already verified")
+
+        # Validate rating
+        try:
+            rating = float(rating)
+            if not (1.0 <= rating <= 10.0):
+                raise ValueError()
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="Rating must be between 1 and 10")
+
+        # Update restaurant with rating
+        conn.execute(
+            "UPDATE restaurants SET rating = ? WHERE id = ?",
+            (rating, restaurant_id),
+        )
+
+        # Record the rating contribution
+        conn.execute(
+            """
+            INSERT INTO verification_contributions
+            (restaurant_id, user_id, contribution_type, comment_text, created_at)
+            VALUES (?, ?, 'rating', ?, ?)
+            """,
+            (
+                restaurant_id,
+                current_user["id"],
+                f"Rated {rating}/10",
+                datetime.now(timezone.utc).isoformat(),
+            ),
+        )
+        conn.commit()
+
+        return {
+            "status": "ok",
+            "message": f"Restaurant verified with rating {rating}/10",
+            "rating": rating,
+        }
+    finally:
+        conn.close()
+
+
 @router.get("/{restaurant_id}/verifications")
 async def get_verifications(restaurant_id: int) -> dict:
     """Fetch verification contributions for a restaurant."""
@@ -138,6 +193,8 @@ async def get_verifications(restaurant_id: int) -> dict:
                 item["comment"] = row["comment_text"]
             elif row["contribution_type"] == "photo":
                 item["photo_id"] = row["photo_id"]
+            elif row["contribution_type"] == "rating":
+                item["comment"] = row["comment_text"]
             result.append(item)
 
         return {
@@ -145,6 +202,7 @@ async def get_verifications(restaurant_id: int) -> dict:
             "contributions": result,
             "total_comments": sum(1 for c in result if c["type"] == "comment"),
             "total_photos": sum(1 for c in result if c["type"] == "photo"),
+            "total_ratings": sum(1 for c in result if c["type"] == "rating"),
         }
     finally:
         conn.close()

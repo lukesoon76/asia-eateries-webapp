@@ -31,7 +31,8 @@ export function VerificationContributions({
   const [commentText, setCommentText] = useState('')
   const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [photoCaption, setPhotoCaption] = useState('')
-  const [activeTab, setActiveTab] = useState<'comment' | 'photo'>('comment')
+  const [activeTab, setActiveTab] = useState<'comment' | 'photo' | 'rate'>('comment')
+  const [ratingValue, setRatingValue] = useState(5)
 
   useEffect(() => {
     if (!isUnverified) return
@@ -81,6 +82,29 @@ export function VerificationContributions({
     } catch (e) {
       console.error('Failed to upload photo:', e)
       alert('Failed to upload photo')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSubmitRating = async () => {
+    setLoading(true)
+    try {
+      const formData = new FormData()
+      formData.append('rating', String(ratingValue))
+      await apiCall(`/api/restaurants/${restaurantId}/rate`, {
+        method: 'POST',
+        body: formData,
+      })
+      setShowForm(false)
+      setRatingValue(5)
+      // Refresh contributions — the restaurant will now be verified
+      const updated = await apiCall(`/api/restaurants/${restaurantId}/verifications`, { method: 'GET' })
+      setContributions(updated)
+      alert('✓ Restaurant verified!')
+    } catch (e) {
+      console.error('Failed to submit rating:', e)
+      alert(`Failed to submit rating: ${e instanceof Error ? e.message : 'Unknown error'}`)
     } finally {
       setLoading(false)
     }
@@ -140,6 +164,17 @@ export function VerificationContributions({
           <div className="flex gap-2 border-b border-neutral-200">
             <button
               type="button"
+              onClick={() => setActiveTab('rate')}
+              className={`px-3 py-1 text-sm font-medium ${
+                activeTab === 'rate'
+                  ? 'border-b-2 border-amber-600 text-amber-600'
+                  : 'text-neutral-500 hover:text-neutral-700'
+              }`}
+            >
+              Rate & Verify
+            </button>
+            <button
+              type="button"
               onClick={() => setActiveTab('comment')}
               className={`px-3 py-1 text-sm font-medium ${
                 activeTab === 'comment'
@@ -161,6 +196,44 @@ export function VerificationContributions({
               Photo
             </button>
           </div>
+
+          {activeTab === 'rate' && (
+            <div>
+              <p className="mb-3 text-sm text-neutral-700">Rate this restaurant from 1–10 to verify it</p>
+              <div className="flex items-center gap-4">
+                <input
+                  type="range"
+                  min="1"
+                  max="10"
+                  step="0.5"
+                  value={ratingValue}
+                  onChange={(e) => setRatingValue(parseFloat(e.target.value))}
+                  className="flex-1 cursor-pointer"
+                />
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl font-bold text-amber-600">{ratingValue.toFixed(1)}</span>
+                  <span className="text-lg">⭐</span>
+                </div>
+              </div>
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowForm(false)}
+                  className="rounded px-3 py-1 text-sm text-neutral-600 hover:bg-neutral-100"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSubmitRating}
+                  disabled={loading}
+                  className="rounded bg-amber-600 px-3 py-1 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+                >
+                  {loading ? 'Verifying...' : 'Verify restaurant'}
+                </button>
+              </div>
+            </div>
+          )}
 
           {activeTab === 'comment' && (
             <div>
