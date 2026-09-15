@@ -38,7 +38,7 @@ export function VerificationContributions({
 
   useEffect(() => {
     if (!isUnverified) return
-    apiCall(`/api/restaurants/${restaurantId}/verifications`, { method: 'GET' })
+    apiCall<VerificationData>(`/api/restaurants/${restaurantId}/verifications`, { method: 'GET' })
       .then(setContributions)
       .catch(console.error)
   }, [restaurantId, isUnverified])
