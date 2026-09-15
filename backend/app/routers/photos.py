@@ -29,6 +29,29 @@ def _photo_out(row) -> PhotoOut:
     )
 
 
+async def _save_photo(file: UploadFile, max_size_mb: int = 8, max_width: int = 1600) -> str:
+    """Process and save a photo, return the filename. Raises HTTPException on failure."""
+    max_bytes = max_size_mb * 1024 * 1024
+    raw = await file.read(max_bytes + 1)
+    if len(raw) > max_bytes:
+        raise HTTPException(status_code=413, detail=f"Image must be {max_size_mb}MB or smaller")
+
+    try:
+        image = Image.open(BytesIO(raw))
+        image.verify()
+        image = Image.open(BytesIO(raw))  # re-open: verify() consumes the parser
+        image = image.convert("RGB")
+    except UnidentifiedImageError:
+        raise HTTPException(status_code=400, detail="File is not a readable image")
+
+    image.thumbnail((max_width, max_width))
+
+    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+    filename = f"{uuid.uuid4().hex}.jpg"
+    image.save(UPLOADS_DIR / filename, format="JPEG", quality=85)
+    return filename
+
+
 @router.post("/photos", response_model=PhotoOut)
 async def upload_photo(
     file: UploadFile,
@@ -41,24 +64,7 @@ async def upload_photo(
     if not restaurant_id and not submission_id:
         raise HTTPException(status_code=400, detail="restaurant_id or submission_id is required")
 
-    raw = await file.read(MAX_UPLOAD_BYTES + 1)
-    if len(raw) > MAX_UPLOAD_BYTES:
-        raise HTTPException(status_code=413, detail="Image must be 8MB or smaller")
-
-    try:
-        image = Image.open(BytesIO(raw))
-        image.verify()
-        image = Image.open(BytesIO(raw))  # re-open: verify() consumes the parser
-        image = image.convert("RGB")
-    except UnidentifiedImageError:
-        raise HTTPException(status_code=400, detail="File is not a readable image")
-
-    image.thumbnail((MAX_DIMENSION, MAX_DIMENSION))
-
-    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-    filename = f"{uuid.uuid4().hex}.jpg"
-    # Re-saving as JPEG (no EXIF passthrough) also strips GPS/EXIF metadata.
-    image.save(UPLOADS_DIR / filename, format="JPEG", quality=85)
+    filename = await _save_photo(file, max_size_mb=8, max_width=MAX_DIMENSION)
 
     conn = get_connection()
     try:
