@@ -123,8 +123,8 @@ export async function apiCall<T>(
     const body = await res.json().catch(() => ({}))
     throw new Error(body.detail || `Request failed: ${res.status}`)
   }
-  if (res.status === 204) return undefined as T
-  return res.json() as Promise<T>
+  if (res.status === 204) return undefined as unknown as T
+  return res.json() as unknown as T
 }
 
 function jsonInit(method: string, body: unknown): RequestInit {
