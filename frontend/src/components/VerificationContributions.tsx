@@ -12,7 +12,7 @@ interface Contribution {
 }
 
 interface VerificationData {
-  restaurant_id: number
+  restaurant_id?: number
   contributions: Contribution[]
   total_comments: number
   total_photos: number
