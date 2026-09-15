@@ -53,7 +53,7 @@ export function VerificationContributions({
       })
       setCommentText('')
       // Refresh contributions
-      const updated = await apiCall(`/api/restaurants/${restaurantId}/verifications`, { method: 'GET' })
+      const updated = await apiCall<VerificationData>(`/api/restaurants/${restaurantId}/verifications`, { method: 'GET' })
       setContributions(updated)
     } catch (e) {
       console.error('Failed to add comment:', e)
@@ -77,7 +77,7 @@ export function VerificationContributions({
       setPhotoFile(null)
       setPhotoCaption('')
       // Refresh contributions
-      const updated = await apiCall(`/api/restaurants/${restaurantId}/verifications`, { method: 'GET' })
+      const updated = await apiCall<VerificationData>(`/api/restaurants/${restaurantId}/verifications`, { method: 'GET' })
       setContributions(updated)
     } catch (e) {
       console.error('Failed to upload photo:', e)
@@ -99,7 +99,7 @@ export function VerificationContributions({
       setShowForm(false)
       setRatingValue(5)
       // Refresh contributions — the restaurant will now be verified
-      const updated = await apiCall(`/api/restaurants/${restaurantId}/verifications`, { method: 'GET' })
+      const updated = await apiCall<VerificationData>(`/api/restaurants/${restaurantId}/verifications`, { method: 'GET' })
       setContributions(updated)
       alert('✓ Restaurant verified!')
     } catch (e) {
