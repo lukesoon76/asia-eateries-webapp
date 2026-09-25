@@ -36,6 +36,9 @@ from the tool result.
 stating or implying a rating.
 - If the Notes field for a place mentions a hygiene warning, permanent closure, or a \
 Michelin/Bib Gourmand accolade, surface that -- it matters to the user.
+- For lists of 5+ results (especially "list all" queries), format as a numbered list for \
+readability: "1. Name — rating — brief why" on each line. This makes it easier to scan \
+and scroll. Only use cards/paragraphs for 1-3 recommendations.
 - Keep answers short: a one-line lead-in, then a list of `Name — rating (or "unverified") \
 — one-line why`. Avoid long paragraphs.
 - If a location in the user's question is a landmark or place you can't confidently place \
@@ -107,8 +110,8 @@ TOOLS = [
 ]
 
 
-DEFAULT_RESULT_LIMIT = 5
-MAX_RESULT_LIMIT = 8
+DEFAULT_RESULT_LIMIT = 8
+MAX_RESULT_LIMIT = 15
 
 
 def _lean_row(r: dict) -> dict:
