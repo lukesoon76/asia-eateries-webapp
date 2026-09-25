@@ -152,7 +152,7 @@ RATING_KEYWORDS = {
 }
 
 # Intent keywords
-LIST_ALL_KEYWORDS = {"list all", "list", "show all", "show me all", "all", "every", "give me all", "find all"}
+LIST_ALL_KEYWORDS = {"list all", "list", "show all", "show me all", "show me", "all", "every", "give me all", "find all", "find"}
 NEAR_KEYWORDS = {"near", "around", "close to", "beside", "next to", "by the", "at the", "in front of"}
 ALTERNATIVE_KEYWORDS = {"what about", "instead", "other", "else", "different", "another", "something else"}
 
