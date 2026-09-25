@@ -154,21 +154,35 @@ def _run_tool(name: str, tool_input: dict[str, Any], parsed: Any = None) -> tupl
     and reduce token waste by sending only relevant restaurants to the LLM.
     """
     if name == "search_restaurants":
-        limit = min(int(tool_input.get("limit") or DEFAULT_RESULT_LIMIT), MAX_RESULT_LIMIT)
+        # For "list_all" intent, return more results; otherwise use default
+        is_list_all = parsed and parsed.intent == "list_all"
+        default_limit = MAX_RESULT_LIMIT if is_list_all else DEFAULT_RESULT_LIMIT
+        limit = min(int(tool_input.get("limit") or default_limit), MAX_RESULT_LIMIT)
 
         # Merge tool_input with parsed query hints (tool_input takes precedence)
-        state = tool_input.get("state") or (parsed.location if parsed else None)
+        # Use multi-location/cuisine from parsed query if available
+        state_cities = None
+        if tool_input.get("state"):
+            state_cities = [tool_input["state"]]
+        elif parsed and parsed.locations:
+            state_cities = parsed.locations
+
+        cuisines = None
+        if tool_input.get("cuisine"):
+            cuisines = [tool_input["cuisine"]]
+        elif parsed and parsed.cuisines:
+            cuisines = parsed.cuisines
+
         category = tool_input.get("category") or (parsed.category if parsed else None)
-        cuisine = tool_input.get("cuisine") or (parsed.cuisine if parsed else None)
         min_rating = tool_input.get("min_rating") or (parsed.min_rating if parsed else None)
         verified_only = parsed.verified_only if parsed else False
 
         total, results = search_restaurants(
             q=tool_input.get("query"),
             country=[tool_input["country"]] if tool_input.get("country") else None,
-            state_city=[state] if state else None,
+            state_city=state_cities,
             category=[category] if category else None,
-            cuisine=[cuisine] if cuisine else None,
+            cuisine=cuisines,
             min_rating=min_rating,
             verified_only=verified_only,
             area_contains=tool_input.get("area"),
@@ -184,9 +198,12 @@ def _run_tool(name: str, tool_input: dict[str, Any], parsed: Any = None) -> tupl
         geo = geocode_query(place)
         if geo["status"] != "ok":
             return {"error": f"Could not geocode '{place}'. Ask the user to clarify the location."}, []
-        limit = min(int(tool_input.get("limit") or DEFAULT_RESULT_LIMIT), MAX_RESULT_LIMIT)
 
-        # Merge tool_input with parsed query hints
+        is_list_all = parsed and parsed.intent == "list_all"
+        default_limit = MAX_RESULT_LIMIT if is_list_all else DEFAULT_RESULT_LIMIT
+        limit = min(int(tool_input.get("limit") or default_limit), MAX_RESULT_LIMIT)
+
+        # Merge tool_input with parsed query hints (use first cuisine if multiple)
         category = tool_input.get("category") or (parsed.category if parsed else None)
         cuisine = tool_input.get("cuisine") or (parsed.cuisine if parsed else None)
         min_rating = tool_input.get("min_rating") or (parsed.min_rating if parsed else None)

@@ -16,11 +16,11 @@ from dataclasses import dataclass
 class ParsedQuery:
     """Extracted intent and constraints from a user message."""
     original: str
-    # What the user is asking for (search, find_near, refine_past)
-    intent: str  # "search" | "find_near" | "refine_past" | "unknown"
+    # What the user is asking for (list_all, search, find_near, refine_past)
+    intent: str  # "list_all" | "search" | "find_near" | "refine_past" | "unknown"
     # Filter hints (all optional, used to pre-filter locally)
-    location: str | None = None  # place name or area
-    cuisine: str | None = None
+    locations: list[str] | None = None  # multiple locations allowed
+    cuisines: list[str] | None = None  # multiple cuisines allowed
     category: str | None = None
     price_tier: str | None = None  # "cheap" | "moderate" | "expensive"
     min_rating: float | None = None  # e.g., 8.5 for "highly rated"
@@ -29,8 +29,17 @@ class ParsedQuery:
     # Whether to prefer verified entries only
     verified_only: bool = False
 
+    # Backward compatibility: return first location/cuisine as singular
+    @property
+    def location(self) -> str | None:
+        return self.locations[0] if self.locations else None
 
-# Cuisine keywords (case-insensitive)
+    @property
+    def cuisine(self) -> str | None:
+        return self.cuisines[0] if self.cuisines else None
+
+
+# Cuisine keywords (case-insensitive) with aliases
 CUISINE_KEYWORDS = {
     "thai": "Thai Cuisine",
     "chinese": "Chinese Cuisine",
@@ -41,10 +50,17 @@ CUISINE_KEYWORDS = {
     "singaporean": "Singaporean Cuisine",
     "vietnamese": "Vietnamese Cuisine",
     "hakka": "Hakka Cuisine",
+    "kejia": "Hakka Cuisine",  # Hakka alias
+    "fujianese": "Hakka Cuisine",  # Hakka/Fujianese overlap
     "cantonese": "Cantonese Cuisine",
+    "yue": "Cantonese Cuisine",  # Cantonese alias
     "sichuan": "Sichuan Cuisine",
+    "szechuan": "Sichuan Cuisine",  # Sichuan alias
     "peking": "Peking Duck",
     "dim sum": "Dim Sum",
+    "hokkien": "Hokkien Cuisine",
+    "teochew": "Teochew Cuisine",
+    "hainanese": "Hainanese Cuisine",
 }
 
 # Category keywords
@@ -77,24 +93,51 @@ CHEAP_KEYWORDS = {"cheap", "budget", "affordable", "inexpensive", "hawker", "sta
 EXPENSIVE_KEYWORDS = {"expensive", "upscale", "fine dining", "premium", "luxury", "michelin"}
 MODERATE_KEYWORDS = {"moderate", "mid-range", "casual", "comfortable"}
 
-# Location keywords (state/city in the dataset)
+# Location keywords with region hierarchies
+# Mapping: keyword → (standard_location, region_for_grouping)
 LOCATION_KEYWORDS = {
+    # Malaysia
     "kl": "Kuala Lumpur",
     "kuala lumpur": "Kuala Lumpur",
-    "penang": "Penang",
-    "sg": "Singapore",
-    "singapore": "Singapore",
-    "bangkok": "Bangkok",
-    "phuket": "Phuket",
-    "hong kong": "Hong Kong",
-    "taipei": "Taipei",
-    "klang": "Klang",
     "petaling jaya": "Petaling Jaya",
     "pj": "Petaling Jaya",
     "subang": "Subang",
     "shah alam": "Shah Alam",
-    "selangor": "Selangor",
+    "klang": "Klang",
     "cheras": "Cheras",
+    "selangor": "Selangor",
+    "penang": "Penang",
+    "ipoh": "Ipoh",
+    "johor bahru": "Johor Bahru",
+    "jb": "Johor Bahru",
+    "melaka": "Melaka",
+    # Singapore
+    "sg": "Singapore",
+    "singapore": "Singapore",
+    # Thailand
+    "bangkok": "Bangkok",
+    "phuket": "Phuket",
+    "chiang mai": "Chiang Mai",
+    # Hong Kong
+    "hong kong": "Hong Kong",
+    "hk": "Hong Kong",
+    # Taiwan
+    "taipei": "Taipei",
+    # Countries/Regions (expands to all locations in that region)
+    "malaysia": "Malaysia",
+    "thailand": "Thailand",
+    "singapore": "Singapore",
+    "hong kong": "Hong Kong",
+    "taiwan": "Taiwan",
+}
+
+# Region hierarchy: if user says "Malaysia", which locations should we include?
+REGION_LOCATIONS = {
+    "Malaysia": ["Kuala Lumpur", "Petaling Jaya", "Subang", "Shah Alam", "Klang", "Cheras", "Selangor", "Penang", "Ipoh", "Johor Bahru", "Melaka"],
+    "Thailand": ["Bangkok", "Phuket", "Chiang Mai"],
+    "Singapore": ["Singapore"],
+    "Hong Kong": ["Hong Kong"],
+    "Taiwan": ["Taipei"],
 }
 
 # Rating tier indicators
@@ -109,6 +152,7 @@ RATING_KEYWORDS = {
 }
 
 # Intent keywords
+LIST_ALL_KEYWORDS = {"list all", "list", "show all", "show me all", "all", "every", "give me all", "find all"}
 NEAR_KEYWORDS = {"near", "around", "close to", "beside", "next to", "by the", "at the", "in front of"}
 ALTERNATIVE_KEYWORDS = {"what about", "instead", "other", "else", "different", "another", "something else"}
 
@@ -116,10 +160,13 @@ ALTERNATIVE_KEYWORDS = {"what about", "instead", "other", "else", "different", "
 def parse_chat_query(message: str) -> ParsedQuery:
     """Parse a user's chat message into structured query components."""
     msg_lower = message.lower().strip()
-    result = ParsedQuery(original=message, intent="unknown")
+    result = ParsedQuery(original=message, intent="unknown", locations=[], cuisines=[])
 
-    # Detect intent: refine_past (alternatives), find_near (location-based), or search
-    if any(kw in msg_lower for kw in ALTERNATIVE_KEYWORDS):
+    # Detect intent: list_all, refine_past (alternatives), find_near (location-based), or search
+    if any(kw in msg_lower for kw in LIST_ALL_KEYWORDS):
+        result.intent = "list_all"
+        result.sort_by_distance = False
+    elif any(kw in msg_lower for kw in ALTERNATIVE_KEYWORDS):
         result.intent = "refine_past"
         result.sort_by_distance = False
     elif any(kw in msg_lower for kw in NEAR_KEYWORDS):
@@ -129,17 +176,25 @@ def parse_chat_query(message: str) -> ParsedQuery:
         result.intent = "search"
         result.sort_by_distance = False
 
-    # Extract location (look for place names)
-    for keyword, standard in LOCATION_KEYWORDS.items():
+    # Extract locations (all matches, handle region expansion)
+    seen_regions = set()
+    for keyword, location in LOCATION_KEYWORDS.items():
         if keyword in msg_lower:
-            result.location = standard
-            break
+            # If it's a region (like "Malaysia"), expand to all cities in that region
+            if location in REGION_LOCATIONS:
+                if location not in seen_regions:
+                    result.locations.extend(REGION_LOCATIONS[location])
+                    seen_regions.add(location)
+            else:
+                # Single location
+                if location not in result.locations:
+                    result.locations.append(location)
 
-    # Extract cuisine
-    for keyword, standard in CUISINE_KEYWORDS.items():
+    # Extract cuisines (all matches)
+    for keyword, cuisine in CUISINE_KEYWORDS.items():
         if keyword in msg_lower:
-            result.cuisine = standard
-            break
+            if cuisine not in result.cuisines:
+                result.cuisines.append(cuisine)
 
     # Extract category
     for keyword, standard in CATEGORY_KEYWORDS.items():
@@ -166,6 +221,12 @@ def parse_chat_query(message: str) -> ParsedQuery:
         if result.min_rating is None:
             result.min_rating = 7.0
         result.verified_only = True
+
+    # Clean up: if lists are empty, set to None for backward compat
+    if not result.locations:
+        result.locations = None
+    if not result.cuisines:
+        result.cuisines = None
 
     return result
 
