@@ -141,9 +141,20 @@ export function DishesAndPhotos({ restaurantId }: { restaurantId: number }) {
         {photos.length > 0 ? (
           <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
             {photos.map((p) => (
-              <a key={p.id} href={p.url} target="_blank" rel="noreferrer">
-                <img src={p.url} alt={p.caption ?? ''} className="aspect-square w-full rounded-md object-cover" />
-              </a>
+              <div key={p.id} className="group relative">
+                <a href={p.url} target="_blank" rel="noreferrer">
+                  <img src={p.url} alt={p.caption ?? ''} className="aspect-square w-full rounded-md object-cover" />
+                </a>
+                {(p.uploaded_by || p.created_at) && (
+                  <div className="absolute inset-0 flex flex-col justify-end rounded-md bg-black/0 p-2 opacity-0 transition-opacity group-hover:bg-black/60 group-hover:opacity-100">
+                    {p.uploaded_by && <p className="text-xs font-medium text-white">📤 {p.uploaded_by}</p>}
+                    {p.created_at && (
+                      <p className="text-xs text-neutral-200">{new Date(p.created_at).toLocaleDateString()}</p>
+                    )}
+                    {p.caption && <p className="mt-1 text-xs text-neutral-100 line-clamp-2">{p.caption}</p>}
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         ) : (

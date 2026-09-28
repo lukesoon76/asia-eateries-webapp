@@ -19,14 +19,19 @@ MAX_UPLOAD_BYTES = 8 * 1024 * 1024  # 8MB
 MAX_DIMENSION = 1600
 
 
-def _photo_out(row) -> PhotoOut:
-    return PhotoOut(
-        id=row["id"],
-        restaurant_id=row["restaurant_id"],
-        dish_id=row["dish_id"],
-        caption=row["caption"],
-        url=f"/uploads/{row['filename']}",
-    )
+def _photo_out(row, include_metadata: bool = False) -> PhotoOut:
+    data = {
+        "id": row["id"],
+        "restaurant_id": row["restaurant_id"],
+        "dish_id": row["dish_id"],
+        "caption": row["caption"],
+        "url": f"/uploads/{row['filename']}",
+    }
+    if include_metadata:
+        # Include uploader info and timestamp when needed
+        data["uploaded_by"] = row.get("uploader_name")
+        data["created_at"] = row.get("created_at")
+    return PhotoOut(**{k: v for k, v in data.items() if v is not None})
 
 
 async def _save_photo(file: UploadFile, max_size_mb: int = 8, max_width: int = 1600) -> str:
@@ -88,8 +93,15 @@ def list_photos(restaurant_id: int):
     conn = get_connection()
     try:
         rows = conn.execute(
-            "SELECT * FROM photos WHERE restaurant_id = ? ORDER BY id DESC", (restaurant_id,)
+            """
+            SELECT p.*, u.display_name as uploader_name
+            FROM photos p
+            LEFT JOIN users u ON p.uploaded_by = u.id
+            WHERE p.restaurant_id = ?
+            ORDER BY p.created_at DESC
+            """,
+            (restaurant_id,),
         ).fetchall()
     finally:
         conn.close()
-    return [_photo_out(r) for r in rows]
+    return [_photo_out(r, include_metadata=True) for r in rows]

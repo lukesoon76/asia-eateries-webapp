@@ -144,3 +144,5 @@ class PhotoOut(BaseModel):
     dish_id: Optional[int] = None
     caption: Optional[str] = None
     url: str
+    uploaded_by: Optional[str] = None  # user display name
+    created_at: Optional[str] = None   # ISO timestamp

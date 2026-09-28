@@ -102,6 +102,8 @@ export interface Photo {
   dish_id: number | null
   caption: string | null
   url: string
+  uploaded_by?: string  // user display name
+  created_at?: string   // ISO timestamp
 }
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
