@@ -167,20 +167,45 @@ export function DishesAndPhotos({ restaurantId }: { restaurantId: number }) {
                 ref={fileInputRef}
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
-                onChange={onFileSelected}
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) setPhotoFile(file)
+                }}
                 disabled={uploading}
                 className="flex-1 text-sm"
               />
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={uploading}
+                disabled={uploading || photoFile !== null}
                 className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
               >
                 Browse
               </button>
             </div>
-            {uploading && <p className="text-xs text-neutral-400">Uploading…</p>}
+            {photoFile && (
+              <div className="flex items-center justify-between gap-2 rounded-md bg-neutral-50 p-2">
+                <p className="text-xs text-neutral-600">{photoFile.name}</p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPhotoFile(null)}
+                    disabled={uploading}
+                    className="rounded px-2 py-1 text-xs text-neutral-600 hover:bg-neutral-200"
+                  >
+                    Clear
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSubmitPhoto}
+                    disabled={uploading}
+                    className="rounded bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                  >
+                    {uploading ? 'Saving…' : 'Save'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
