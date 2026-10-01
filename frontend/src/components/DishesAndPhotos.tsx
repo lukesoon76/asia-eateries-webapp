@@ -161,16 +161,26 @@ export function DishesAndPhotos({ restaurantId }: { restaurantId: number }) {
           <p className="mt-2 text-sm text-neutral-400">No photos yet.</p>
         )}
         {user && (
-          <div className="mt-3">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              onChange={onFileSelected}
-              disabled={uploading}
-              className="text-sm"
-            />
-            {uploading && <p className="mt-1 text-xs text-neutral-400">Uploading…</p>}
+          <div className="mt-3 space-y-2">
+            <div className="flex items-center gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={onFileSelected}
+                disabled={uploading}
+                className="flex-1 text-sm"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
+              >
+                Browse
+              </button>
+            </div>
+            {uploading && <p className="text-xs text-neutral-400">Uploading…</p>}
           </div>
         )}
       </div>
