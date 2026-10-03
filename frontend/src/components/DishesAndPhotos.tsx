@@ -60,6 +60,7 @@ export function DishesAndPhotos({ restaurantId }: { restaurantId: number }) {
   const [addingDish, setAddingDish] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [photoFile, setPhotoFile] = useState<File | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -162,29 +163,29 @@ export function DishesAndPhotos({ restaurantId }: { restaurantId: number }) {
         )}
         {user && (
           <div className="mt-3 space-y-2">
-            <div className="flex items-center gap-2">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                onChange={(e) => {
-                  const file = e.target.files?.[0]
-                  if (file) setPhotoFile(file)
-                }}
-                disabled={uploading}
-                className="flex-1 text-sm"
-              />
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) setPhotoFile(file)
+              }}
+              disabled={uploading}
+              className="text-sm"
+              style={{ display: 'none' }}
+            />
+            {!photoFile ? (
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={uploading || photoFile !== null}
+                disabled={uploading}
                 className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
               >
-                Browse
+                Browse Files
               </button>
-            </div>
-            {photoFile && (
-              <div className="flex items-center justify-between gap-2 rounded-md bg-neutral-50 p-2">
+            ) : (
+              <div className="flex items-center justify-between gap-2 rounded-md bg-neutral-50 p-3">
                 <p className="text-xs text-neutral-600">{photoFile.name}</p>
                 <div className="flex gap-2">
                   <button
@@ -193,7 +194,7 @@ export function DishesAndPhotos({ restaurantId }: { restaurantId: number }) {
                     disabled={uploading}
                     className="rounded px-2 py-1 text-xs text-neutral-600 hover:bg-neutral-200"
                   >
-                    Clear
+                    Cancel
                   </button>
                   <button
                     type="button"
