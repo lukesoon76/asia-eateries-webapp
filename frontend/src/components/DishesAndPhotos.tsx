@@ -87,16 +87,22 @@ export function DishesAndPhotos({ restaurantId }: { restaurantId: number }) {
   async function onFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
+    setPhotoFile(file)
+  }
+
+  async function handleSubmitPhoto() {
+    if (!photoFile) return
     setUploading(true)
     setError(null)
     try {
-      const photo = await uploadPhoto({ restaurantId }, file)
+      const photo = await uploadPhoto({ restaurantId }, photoFile)
       setPhotos((prev) => [photo, ...prev])
+      setPhotoFile(null)
+      if (fileInputRef.current) fileInputRef.current.value = ''
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed')
     } finally {
       setUploading(false)
-      if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
 
