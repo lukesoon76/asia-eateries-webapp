@@ -84,12 +84,6 @@ export function DishesAndPhotos({ restaurantId }: { restaurantId: number }) {
     }
   }
 
-  async function onFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setPhotoFile(file)
-  }
-
   async function handleSubmitPhoto() {
     if (!photoFile) return
     setUploading(true)
