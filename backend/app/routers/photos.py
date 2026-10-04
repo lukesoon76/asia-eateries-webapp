@@ -82,10 +82,18 @@ async def upload_photo(
              datetime.now(timezone.utc).isoformat()),
         )
         conn.commit()
-        row = conn.execute("SELECT * FROM photos WHERE id = ?", (cur.lastrowid,)).fetchone()
+        row = conn.execute(
+            """
+            SELECT p.*, u.display_name as uploader_name
+            FROM photos p
+            LEFT JOIN users u ON p.uploaded_by = u.id
+            WHERE p.id = ?
+            """,
+            (cur.lastrowid,),
+        ).fetchone()
     finally:
         conn.close()
-    return _photo_out(row)
+    return _photo_out(row, include_metadata=True)
 
 
 @router.get("/restaurants/{restaurant_id}/photos", response_model=list[PhotoOut])
