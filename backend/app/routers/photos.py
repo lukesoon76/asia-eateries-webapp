@@ -68,34 +68,42 @@ async def upload_photo(
     caption: Optional[str] = Form(default=None),
     user: dict = Depends(require_user),
 ):
-    if not restaurant_id and not submission_id:
-        raise HTTPException(status_code=400, detail="restaurant_id or submission_id is required")
-
-    filename = await _save_photo(file, max_size_mb=8, max_width=MAX_DIMENSION)
-
-    conn = get_connection()
     try:
-        cur = conn.execute(
-            """
-            INSERT INTO photos (restaurant_id, submission_id, dish_id, uploaded_by, filename, caption, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (restaurant_id, submission_id, dish_id, user["id"], filename, caption,
-             datetime.now(timezone.utc).isoformat()),
-        )
-        conn.commit()
-        row = conn.execute(
-            """
-            SELECT p.*, u.display_name as uploader_name
-            FROM photos p
-            LEFT JOIN users u ON p.uploaded_by = u.id
-            WHERE p.id = ?
-            """,
-            (cur.lastrowid,),
-        ).fetchone()
-    finally:
-        conn.close()
-    return _photo_out(row, include_metadata=True)
+        if not restaurant_id and not submission_id:
+            raise HTTPException(status_code=400, detail="restaurant_id or submission_id is required")
+
+        filename = await _save_photo(file, max_size_mb=8, max_width=MAX_DIMENSION)
+
+        conn = get_connection()
+        try:
+            cur = conn.execute(
+                """
+                INSERT INTO photos (restaurant_id, submission_id, dish_id, uploaded_by, filename, caption, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (restaurant_id, submission_id, dish_id, user["id"], filename, caption,
+                 datetime.now(timezone.utc).isoformat()),
+            )
+            conn.commit()
+            row = conn.execute(
+                """
+                SELECT p.*, u.display_name as uploader_name
+                FROM photos p
+                LEFT JOIN users u ON p.uploaded_by = u.id
+                WHERE p.id = ?
+                """,
+                (cur.lastrowid,),
+            ).fetchone()
+        finally:
+            conn.close()
+        return _photo_out(row, include_metadata=True)
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        print(f"Upload error: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=400, detail=f"Upload failed: {str(e)}")
 
 
 @router.get("/restaurants/{restaurant_id}/photos", response_model=list[PhotoOut])
