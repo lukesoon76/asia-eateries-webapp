@@ -29,8 +29,14 @@ def _photo_out(row, include_metadata: bool = False) -> PhotoOut:
     }
     if include_metadata:
         # Include uploader info and timestamp when needed
-        data["uploaded_by"] = row.get("uploader_name")
-        data["created_at"] = row.get("created_at")
+        try:
+            data["uploaded_by"] = row["uploader_name"]
+        except (KeyError, IndexError):
+            pass
+        try:
+            data["created_at"] = row["created_at"]
+        except (KeyError, IndexError):
+            pass
     return PhotoOut(**{k: v for k, v in data.items() if v is not None})
 
 
