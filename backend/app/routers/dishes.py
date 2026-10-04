@@ -99,3 +99,44 @@ def rate_dish(dish_id: int, body: RateDishRequest, user: dict = Depends(require_
         return _dish_out(conn, dish, user["id"])
     finally:
         conn.close()
+
+
+@router.delete("/dishes/{dish_id}")
+def delete_dish(dish_id: int, user: dict = Depends(require_user)):
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Only admins can delete dishes")
+
+    conn = get_connection()
+    try:
+        dish = conn.execute("SELECT * FROM dishes WHERE id = ?", (dish_id,)).fetchone()
+        if not dish:
+            raise HTTPException(status_code=404, detail="Dish not found")
+
+        conn.execute("DELETE FROM dishes WHERE id = ?", (dish_id,))
+        conn.commit()
+    finally:
+        conn.close()
+    return {"ok": True}
+
+
+@router.patch("/dishes/{dish_id}")
+def update_dish(dish_id: int, body: NewDishRequest, user: dict = Depends(require_user)):
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Only admins can edit dishes")
+
+    name = body.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Dish name is required")
+
+    conn = get_connection()
+    try:
+        dish = conn.execute("SELECT * FROM dishes WHERE id = ?", (dish_id,)).fetchone()
+        if not dish:
+            raise HTTPException(status_code=404, detail="Dish not found")
+
+        conn.execute("UPDATE dishes SET name = ? WHERE id = ?", (name, dish_id))
+        conn.commit()
+        updated_dish = conn.execute("SELECT * FROM dishes WHERE id = ?", (dish_id,)).fetchone()
+        return _dish_out(conn, updated_dish, user["id"])
+    finally:
+        conn.close()

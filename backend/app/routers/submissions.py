@@ -125,3 +125,18 @@ def reject_submission(submission_id: int, body: RejectRequest, admin: dict = Dep
     finally:
         conn.close()
     return _row_to_out(row)
+
+
+@router.delete("/admin/submissions/{submission_id}")
+def delete_submission(submission_id: int, admin: dict = Depends(require_admin)):
+    conn = get_connection()
+    try:
+        sub = conn.execute("SELECT * FROM submissions WHERE id = ?", (submission_id,)).fetchone()
+        if sub is None:
+            raise HTTPException(status_code=404, detail="Submission not found")
+
+        conn.execute("DELETE FROM submissions WHERE id = ?", (submission_id,))
+        conn.commit()
+    finally:
+        conn.close()
+    return {"ok": True}

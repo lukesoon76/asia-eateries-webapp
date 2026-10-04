@@ -129,3 +129,48 @@ def list_photos(restaurant_id: int):
     finally:
         conn.close()
     return [_photo_out(r, include_metadata=True) for r in rows]
+
+
+@router.delete("/photos/{photo_id}")
+def delete_photo(photo_id: int, user: dict = Depends(require_user)):
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Only admins can delete photos")
+
+    conn = get_connection()
+    try:
+        photo = conn.execute("SELECT * FROM photos WHERE id = ?", (photo_id,)).fetchone()
+        if not photo:
+            raise HTTPException(status_code=404, detail="Photo not found")
+
+        conn.execute("DELETE FROM photos WHERE id = ?", (photo_id,))
+        conn.commit()
+    finally:
+        conn.close()
+    return {"ok": True}
+
+
+@router.patch("/photos/{photo_id}")
+def update_photo(photo_id: int, caption: Optional[str] = Form(default=None), user: dict = Depends(require_user)):
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Only admins can edit photos")
+
+    conn = get_connection()
+    try:
+        photo = conn.execute("SELECT * FROM photos WHERE id = ?", (photo_id,)).fetchone()
+        if not photo:
+            raise HTTPException(status_code=404, detail="Photo not found")
+
+        conn.execute("UPDATE photos SET caption = ? WHERE id = ?", (caption, photo_id))
+        conn.commit()
+        row = conn.execute(
+            """
+            SELECT p.*, u.display_name as uploader_name
+            FROM photos p
+            LEFT JOIN users u ON p.uploaded_by = u.id
+            WHERE p.id = ?
+            """,
+            (photo_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+    return _photo_out(row, include_metadata=True)

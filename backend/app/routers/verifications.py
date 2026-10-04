@@ -206,3 +206,22 @@ async def get_verifications(restaurant_id: int) -> dict:
         }
     finally:
         conn.close()
+
+
+@router.delete("/verifications/{contribution_id}")
+def delete_verification_contribution(contribution_id: int, user: dict = Depends(require_user)):
+    """Delete a verification contribution (admin only)."""
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Only admins can delete contributions")
+
+    conn = get_connection()
+    try:
+        contrib = conn.execute("SELECT * FROM verification_contributions WHERE id = ?", (contribution_id,)).fetchone()
+        if not contrib:
+            raise HTTPException(status_code=404, detail="Contribution not found")
+
+        conn.execute("DELETE FROM verification_contributions WHERE id = ?", (contribution_id,))
+        conn.commit()
+    finally:
+        conn.close()
+    return {"ok": True}
