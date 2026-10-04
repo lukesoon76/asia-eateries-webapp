@@ -48,6 +48,8 @@ async def _save_photo(file: UploadFile, max_size_mb: int = 8, max_width: int = 1
         image = image.convert("RGB")
     except UnidentifiedImageError:
         raise HTTPException(status_code=400, detail="File is not a readable image")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Image processing failed: {str(e)}")
 
     image.thumbnail((max_width, max_width))
 
