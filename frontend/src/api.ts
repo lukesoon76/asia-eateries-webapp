@@ -211,6 +211,14 @@ export function rateDish(dishId: number, rating: number): Promise<Dish> {
   return fetchJson(`/api/dishes/${dishId}/rate`, jsonInit('POST', { rating }))
 }
 
+export function deleteDish(dishId: number): Promise<{ ok: boolean }> {
+  return fetchJson(`/api/dishes/${dishId}`, { method: 'DELETE' })
+}
+
+export function updateDishName(dishId: number, name: string): Promise<Dish> {
+  return fetchJson(`/api/dishes/${dishId}`, jsonInit('PATCH', { name }))
+}
+
 // --- Photos ---
 
 export function getPhotos(restaurantId: number): Promise<Photo[]> {
@@ -234,4 +242,18 @@ export async function uploadPhoto(
     throw new Error(body.detail || `Upload failed: ${res.status}`)
   }
   return res.json()
+}
+
+export function deletePhoto(photoId: number): Promise<{ ok: boolean }> {
+  return fetchJson(`/api/photos/${photoId}`, { method: 'DELETE' })
+}
+
+export function updatePhotoCaption(photoId: number, caption: string): Promise<Photo> {
+  const form = new FormData()
+  form.append('caption', caption)
+  return fetch(`/api/photos/${photoId}`, { method: 'PATCH', body: form, credentials: 'include' })
+    .then(res => {
+      if (!res.ok) throw new Error(`Update failed: ${res.status}`)
+      return res.json()
+    })
 }
