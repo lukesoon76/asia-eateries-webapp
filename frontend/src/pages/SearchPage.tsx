@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { getFilterOptions, search, type FilterOptions, type Restaurant, type SearchResponse } from '../api'
 import { FilterPanel } from '../components/FilterPanel'
-import { RestaurantCard } from '../components/RestaurantCard'
 import { RestaurantDetailModal } from '../components/RestaurantDetailModal'
+import { RestaurantRow } from '../components/RestaurantRow'
 import { countActiveFilters, filtersToParams, paramsToFilters, type Filters } from '../lib/filters'
 
 const PAGE_SIZE = 25
@@ -13,16 +13,18 @@ export function SearchPage() {
   const [inputValue, setInputValue] = useState(urlParams.get('q') ?? '')
   const filters = paramsToFilters(urlParams)
   const q = urlParams.get('q') ?? ''
-  const page = Number(urlParams.get('page') ?? '1')
   const sortBy = urlParams.get('sort_by') ?? 'id'
   const order = urlParams.get('order') ?? 'asc'
 
   const [filterOptions, setFilterOptions] = useState<FilterOptions | null>(null)
   const [filterPanelOpen, setFilterPanelOpen] = useState(false)
   const [response, setResponse] = useState<SearchResponse | null>(null)
+  const [items, setItems] = useState<Restaurant[]>([])
   const [loading, setLoading] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [selected, setSelected] = useState<Restaurant | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const requestId = useRef(0)
 
   const engaged = Boolean(q) || countActiveFilters(filters) > 0 || response !== null
 
@@ -37,7 +39,6 @@ export function SearchPage() {
         const next = new URLSearchParams(urlParams)
         if (inputValue) next.set('q', inputValue)
         else next.delete('q')
-        next.set('page', '1')
         setUrlParams(next, { replace: true })
       }
     }, 300)
@@ -46,31 +47,54 @@ export function SearchPage() {
   }, [inputValue])
 
   useEffect(() => {
+    const id = ++requestId.current
     if (!q && countActiveFilters(filters) === 0) {
       setResponse(null)
+      setItems([])
       return
     }
     setLoading(true)
     setError(null)
-    const params = filtersToParams(q, filters, page, sortBy, order)
+    const params = filtersToParams(q, filters, 1, sortBy, order)
     params.set('page_size', String(PAGE_SIZE))
     search(params)
-      .then(setResponse)
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false))
+      .then((r) => {
+        if (id !== requestId.current) return
+        setResponse(r)
+        setItems(r.results)
+      })
+      .catch((e) => {
+        if (id === requestId.current) setError(e.message)
+      })
+      .finally(() => {
+        if (id === requestId.current) setLoading(false)
+      })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlParams.toString()])
+
+  function loadMore() {
+    if (!response || loadingMore) return
+    const id = requestId.current
+    const nextPage = Math.floor(items.length / PAGE_SIZE) + 1
+    setLoadingMore(true)
+    const params = filtersToParams(q, filters, nextPage, sortBy, order)
+    params.set('page_size', String(PAGE_SIZE))
+    search(params)
+      .then((r) => {
+        if (id !== requestId.current) return
+        setItems((prev) => [...prev, ...r.results])
+      })
+      .catch((e) => {
+        if (id === requestId.current) setError(e.message)
+      })
+      .finally(() => {
+        if (id === requestId.current) setLoadingMore(false)
+      })
+  }
 
   function applyFilters(next: Filters) {
     const params = filtersToParams(q, next, 1, sortBy, order)
     setUrlParams(params)
-  }
-
-  function setPage(p: number) {
-    const next = new URLSearchParams(urlParams)
-    next.set('page', String(p))
-    setUrlParams(next)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   function setSort(nextSortBy: string, nextOrder: string) {
@@ -81,7 +105,7 @@ export function SearchPage() {
   }
 
   const activeCount = countActiveFilters(filters)
-  const totalPages = response ? Math.max(1, Math.ceil(response.total / PAGE_SIZE)) : 1
+  const hasMore = response !== null && items.length < response.total
 
   return (
     <div className={`mx-auto flex min-h-[calc(100vh-56px)] w-full max-w-5xl flex-col px-4 ${engaged ? 'pt-8' : 'justify-center'}`}>
@@ -120,7 +144,13 @@ export function SearchPage() {
       {engaged && (
         <>
           <div className="mt-4 flex items-center justify-between text-sm text-neutral-500">
-            <span>{loading ? 'Searching…' : response ? `${response.total.toLocaleString()} results` : ''}</span>
+            <span>
+              {loading
+                ? 'Searching…'
+                : response
+                  ? `Showing ${items.length.toLocaleString()} of ${response.total.toLocaleString()} results`
+                  : ''}
+            </span>
             <div className="flex items-center gap-2">
               <label htmlFor="sort" className="text-neutral-400">Sort:</label>
               <select
@@ -143,9 +173,9 @@ export function SearchPage() {
 
           {error && <p className="mt-6 text-center text-sm text-red-600">{error}</p>}
 
-          <div className="mt-4 grid grid-cols-1 gap-3 pb-10 sm:grid-cols-2 lg:grid-cols-3">
-            {response?.results.map((r) => (
-              <RestaurantCard key={r.id} restaurant={r} onClick={() => setSelected(r)} />
+          <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-2">
+            {items.map((r) => (
+              <RestaurantRow key={r.id} restaurant={r} onClick={() => setSelected(r)} />
             ))}
           </div>
 
@@ -153,26 +183,15 @@ export function SearchPage() {
             <p className="mt-10 text-center text-neutral-400">No restaurants match your search and filters.</p>
           )}
 
-          {response && totalPages > 1 && (
-            <div className="mb-10 flex items-center justify-center gap-3">
+          {hasMore && (
+            <div className="mb-10 mt-6 flex justify-center">
               <button
                 type="button"
-                disabled={page <= 1}
-                onClick={() => setPage(page - 1)}
-                className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm disabled:opacity-40"
+                onClick={loadMore}
+                disabled={loadingMore}
+                className="rounded-full border border-neutral-300 bg-white px-5 py-2 text-sm font-medium text-neutral-700 shadow-sm hover:bg-neutral-50 disabled:opacity-50"
               >
-                Previous
-              </button>
-              <span className="text-sm text-neutral-500">
-                Page {page} of {totalPages}
-              </span>
-              <button
-                type="button"
-                disabled={page >= totalPages}
-                onClick={() => setPage(page + 1)}
-                className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm disabled:opacity-40"
-              >
-                Next
+                {loadingMore ? 'Loading…' : 'Load more'}
               </button>
             </div>
           )}
