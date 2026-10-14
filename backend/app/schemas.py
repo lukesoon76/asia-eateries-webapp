@@ -28,6 +28,7 @@ class RestaurantOut(BaseModel):
     geocode_status: Optional[str] = None
     verified: bool = False
     distance_km: Optional[float] = None
+    thumbnail_url: Optional[str] = None
 
 
 class SearchResponse(BaseModel):

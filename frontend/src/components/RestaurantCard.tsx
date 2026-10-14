@@ -18,8 +18,16 @@ export function RestaurantCard({
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full flex-col gap-2 rounded-xl border border-neutral-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+      className="flex w-full flex-col gap-2 overflow-hidden rounded-xl border border-neutral-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
     >
+      {restaurant.thumbnail_url && (
+        <img
+          src={restaurant.thumbnail_url}
+          alt=""
+          loading="lazy"
+          className="-mx-4 -mt-4 mb-1 aspect-[4/3] w-[calc(100%+2rem)] object-cover"
+        />
+      )}
       <div className="flex items-start justify-between gap-2">
         <h3 className="font-semibold leading-snug text-neutral-900">{displayName(restaurant.name)}</h3>
         <StarRating rating={restaurant.rating} />

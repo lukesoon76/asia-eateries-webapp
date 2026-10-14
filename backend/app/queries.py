@@ -127,9 +127,27 @@ def search_restaurants(
             [*params, page_size, offset],
         ).fetchall()
 
-        return total, [row_to_dict(r) for r in rows]
+        results = [row_to_dict(r) for r in rows]
+        _attach_thumbnails(conn, results)
+        return total, results
     finally:
         conn.close()
+
+
+def _attach_thumbnails(conn: sqlite3.Connection, restaurants: list[dict]) -> None:
+    if not restaurants:
+        return
+    ids = [r["id"] for r in restaurants]
+    photos = conn.execute(
+        f"SELECT restaurant_id, filename FROM photos WHERE restaurant_id IN ({','.join('?' * len(ids))}) ORDER BY created_at DESC",
+        ids,
+    ).fetchall()
+    latest: dict[int, str] = {}
+    for p in photos:
+        latest.setdefault(p["restaurant_id"], p["filename"])
+    for r in restaurants:
+        filename = latest.get(r["id"])
+        r["thumbnail_url"] = f"/uploads/{filename}" if filename else None
 
 
 def _fts_query(q: str) -> str:

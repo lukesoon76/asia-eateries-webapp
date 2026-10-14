@@ -21,6 +21,7 @@ export interface Restaurant {
   geocode_status: string | null
   verified: boolean
   distance_km: number | null
+  thumbnail_url?: string | null
 }
 
 export interface SearchResponse {
