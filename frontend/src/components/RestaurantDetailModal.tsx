@@ -3,6 +3,7 @@ import type { Restaurant } from '../api'
 import { hasHygieneFlag } from '../lib/text'
 import { AccoladeBadge } from './AccoladeBadge'
 import { DishesAndPhotos } from './DishesAndPhotos'
+import { FeedbackColumns } from './FeedbackColumns'
 import { StarRating } from './StarRating'
 import { VerificationContributions } from './VerificationContributions'
 
@@ -92,6 +93,8 @@ export function RestaurantDetailModal({
             </dd>
           </div>
         )}
+
+        <FeedbackColumns notes={restaurant.notes} accolades={restaurant.accolades} />
 
         <VerificationContributions restaurantId={restaurant.id} isUnverified={!restaurant.verified} />
 
