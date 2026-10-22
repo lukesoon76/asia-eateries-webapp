@@ -23,7 +23,7 @@ class ParsedQuery:
     cuisines: list[str] | None = None  # multiple cuisines allowed
     category: str | None = None
     price_tier: str | None = None  # "cheap" | "moderate" | "expensive"
-    min_rating: float | None = None  # e.g., 8.5 for "highly rated"
+    min_rating: float | None = None  # on the 0-5 rating scale, e.g., 4.25 for "best"
     # Whether to sort by distance (find_near) vs rating (search)
     sort_by_distance: bool = False
     # Whether to prefer verified entries only
@@ -142,13 +142,13 @@ REGION_LOCATIONS = {
 
 # Rating tier indicators
 RATING_KEYWORDS = {
-    "best": 8.5,
-    "top": 8.5,
-    "highly rated": 8.0,
-    "highly-rated": 8.0,
-    "rated": 7.0,
-    "good": 7.0,
-    "great": 8.0,
+    "best": 4.25,
+    "top": 4.25,
+    "highly rated": 4.0,
+    "highly-rated": 4.0,
+    "rated": 3.5,
+    "good": 3.5,
+    "great": 4.0,
 }
 
 # Intent keywords
@@ -219,7 +219,7 @@ def parse_chat_query(message: str) -> ParsedQuery:
     # Detect "highly verified" intent (e.g., "best rated")
     if any(kw in msg_lower for kw in ["verified", "best", "top-rated", "top rated", "rated"]):
         if result.min_rating is None:
-            result.min_rating = 7.0
+            result.min_rating = 3.5
         result.verified_only = True
 
     # Clean up: if lists are empty, set to None for backward compat

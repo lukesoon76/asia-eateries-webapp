@@ -36,11 +36,13 @@ from the tool result.
 stating or implying a rating.
 - If the Notes field for a place mentions a hygiene warning, permanent closure, or a \
 Michelin/Bib Gourmand accolade, surface that -- it matters to the user.
-- For lists of 5+ results (especially "list all" queries), format as a numbered list for \
-readability: "1. Name — rating — brief why" on each line. This makes it easier to scan \
-and scroll. Only use cards/paragraphs for 1-3 recommendations.
-- Keep answers short: a one-line lead-in, then a list of `Name — rating (or "unverified") \
-— one-line why`. Avoid long paragraphs.
+- Do NOT list restaurants in your reply. The restaurant cards shown under your message \
+display the matches (name, rating, area), so your reply is a one- or two-sentence lead-in \
+that says what you searched for and how many matched. Mention a specific place only to \
+flag a hygiene warning, closure, or accolade from its Notes field.
+- If the search returns nothing, say so in one sentence and suggest a single change to \
+the search (a nearby area, a different dish name, or dropping a filter).
+- Never add a rating, verified-only, or price filter the user did not ask for.
 - If a location in the user's question is a landmark or place you can't confidently place \
 (and find_near returns no geocode), ask a brief clarifying question instead of guessing.
 - If asked a follow-up like "what about something cheaper?", reuse context from earlier in \
@@ -65,7 +67,6 @@ TOOLS = [
                     "cuisine": {"type": ["string", "null"], "description": "Cuisine/style, e.g. 'Hakka Cuisine'"},
                     "country": {"type": ["string", "null"]},
                     "state": {"type": ["string", "null"], "description": "State/City, e.g. 'Kuala Lumpur', 'Penang'"},
-                    "min_rating": {"type": ["number", "null"]},
                     "area": {"type": ["string", "null"], "description": "Neighbourhood, e.g. 'Cheras', 'George Town'"},
                     "limit": {"type": ["integer", "null"], "default": 5},
                 },
@@ -88,7 +89,6 @@ TOOLS = [
                     "radius_km": {"type": ["number", "null"], "default": 3},
                     "category": {"type": ["string", "null"]},
                     "cuisine": {"type": ["string", "null"]},
-                    "min_rating": {"type": ["number", "null"]},
                     "limit": {"type": ["integer", "null"], "default": 5},
                 },
                 "required": ["place_name_or_address"],
@@ -177,7 +177,7 @@ def _run_tool(name: str, tool_input: dict[str, Any], parsed: Any = None) -> tupl
             cuisines = parsed.cuisines
 
         category = tool_input.get("category") or (parsed.category if parsed else None)
-        min_rating = tool_input.get("min_rating") or (parsed.min_rating if parsed else None)
+        min_rating = parsed.min_rating if parsed else None
         verified_only = parsed.verified_only if parsed else False
 
         total, results = search_restaurants(
@@ -209,7 +209,7 @@ def _run_tool(name: str, tool_input: dict[str, Any], parsed: Any = None) -> tupl
         # Merge tool_input with parsed query hints (use first cuisine if multiple)
         category = tool_input.get("category") or (parsed.category if parsed else None)
         cuisine = tool_input.get("cuisine") or (parsed.cuisine if parsed else None)
-        min_rating = tool_input.get("min_rating") or (parsed.min_rating if parsed else None)
+        min_rating = parsed.min_rating if parsed else None
 
         results = find_near(
             geo["lat"],
